@@ -37,6 +37,8 @@ app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ message: 'Server error' });
 });
+const employeeRoutes = require('./routes/employee');
+app.use('/api/employee', employeeRoutes);
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));//hey
