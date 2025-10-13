@@ -1,16 +1,16 @@
 const mongoose = require('mongoose');
 
 const DocumentSchema = new mongoose.Schema({
-  name: String,
+  name: String, // Document type like Aadhaar, PAN, Resume
   filename: String,
   mimetype: String,
   size: Number,
   status: {
     type: String,
-    enum: ['Pending','Approved','Rejected'],
+    enum: ['Pending', 'Approved', 'Rejected'],
     default: 'Pending'
   },
-  remarks: String,
+  remarks: String, // Optional HR/SuperAdmin remarks
   uploadedAt: { type: Date, default: Date.now }
 });
 
@@ -18,7 +18,13 @@ const UserSchema = new mongoose.Schema({
   employeeId: { type: String, required: true, unique: true }, // unique employee ID
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true, select: false },
-  role: { type: String, enum: ['employee','hr','admin'], default: 'employee' },
+
+  // Roles: employee / hr / admin / superadmin
+  role: { type: String, enum: ['employee', 'hr', 'admin', 'superadmin'], default: 'employee' },
+
+  // OTP for email verification or HR flow
+  otp: String,
+  otpExpires: Date,
 
   // basic personal info
   name: String,

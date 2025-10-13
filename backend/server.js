@@ -39,6 +39,9 @@ app.use((err, req, res, next) => {
 });
 const employeeRoutes = require('./routes/employee');
 app.use('/api/employee', employeeRoutes);
+const hrRoutes = require('./routes/hr');
+app.use('/api/hr', hrRoutes);
+
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));//hey
