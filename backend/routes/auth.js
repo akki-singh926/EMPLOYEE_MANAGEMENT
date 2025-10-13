@@ -3,7 +3,10 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
+const nodemailer = require('nodemailer');
 const { signToken } = require('../utils/token');
+const sgMail = require('@sendgrid/mail');
+
 
 const router = express.Router();
 
@@ -84,15 +87,20 @@ router.post('/login', [
  * -> generate reset token and store hashed token and expiry on user
  * (You should email the token link to user in production)
  */
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+// ----------------------
+// FORGOT PASSWORD
+// ----------------------
 router.post('/forgot-password', [
   body('email').isEmail()
 ], async (req, res) => {
   const { email } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(200).json({ message: 'If email exists, a reset token was sent' });
+    if (!user) return res.status(200).json({ message: 'If email exists, a reset link was sent' });
 
-    // create reset token (plain) and store hashed version
+    // Create reset token (plain) and store hashed version
     const resetToken = crypto.randomBytes(20).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
 
@@ -100,19 +108,34 @@ router.post('/forgot-password', [
     user.resetPasswordExpires = Date.now() + (parseInt(process.env.RESET_TOKEN_EXPIRES_MIN || '30') * 60 * 1000);
     await user.save();
 
-    // TODO: send email with link containing plain resetToken
-    // For dev, we return the token in response (REMOVE in prod)
-    res.json({ message: 'Reset token generated (dev only)', resetToken });
+    // Use backend env variable for frontend URL
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+
+    const msg = {
+      to: user.email,
+      from: process.env.EMAIL_FROM,
+      subject: 'Password Reset Request',
+      html: `
+        <p>You requested a password reset.</p>
+        <p>Click <a href="${resetUrl}">here</a> to reset your password.</p>
+        <p>This link will expire in 30 minutes.</p>
+      `,
+    };
+
+    await sgMail.send(msg);
+
+    res.json({ message: 'Reset email sent successfully' });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-/**
- * POST /api/auth/reset-password
- * body: token, password
- */
+// ----------------------
+// RESET PASSWORD
+// ----------------------
 router.post('/reset-password', [
   body('token').exists(),
   body('password').isLength({ min: 6 })
@@ -124,15 +147,18 @@ router.post('/reset-password', [
       resetPasswordToken: hashedToken,
       resetPasswordExpires: { $gt: Date.now() }
     });
+
     if (!user) return res.status(400).json({ message: 'Invalid or expired token' });
 
-    const salt = await require('bcryptjs').genSalt(10);
-    user.password = await require('bcryptjs').hash(password, salt);
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+
     await user.save();
 
     res.json({ message: 'Password reset successful' });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
