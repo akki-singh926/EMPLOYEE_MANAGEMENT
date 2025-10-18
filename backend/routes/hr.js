@@ -5,17 +5,50 @@ const User = require('../models/User');
 const crypto = require('crypto');
 const sendEmail = require('../utils/email');
 
-// ----------------------
-// GET all employees
+
+// GET all employees (FIXED TO INCLUDE DOCUMENTS)
 // ----------------------
 router.get('/employees', protect, authorizeRoles('hr', 'admin'), async (req, res) => {
-  try {
-    const employees = await User.find({ role: 'employee' }).select('-password -otp -otpExpires');
-    res.json({ success: true, data: employees });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
+    try {
+     
+        const employees = await User.find({})
+            .select('-password -otp -otpExpires') 
+            .lean(); // Use .lean() for faster query
+
+        // --- NEW: CALCULATE OVERALL STATUS ---
+        const employeesWithStatus = employees.map(employee => {
+            const docs = employee.documents || [];
+            let status = 'Not Uploaded';
+
+            if (docs.length > 0) {
+                const hasRejected = docs.some(doc => doc.status === 'Rejected');
+                const hasPending = docs.some(doc => doc.status === 'Pending');
+                const allApproved = docs.every(doc => doc.status === 'Approved');
+
+                if (hasRejected) {
+                    status = 'Rejected';
+                } else if (hasPending) {
+                    status = 'Pending';
+                } else if (allApproved) {
+                    status = 'Approved';
+                }
+            }
+            
+            return {
+                ...employee,
+                // Attach the calculated status field
+                status: status, 
+            };
+        });
+        // --- END CALCULATION ---
+
+        // Send the complete list with calculated status to the frontend
+        res.json({ success: true, data: employeesWithStatus });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ----------------------
@@ -48,6 +81,48 @@ router.post('/send-otp', protect, authorizeRoles('hr', 'admin'), async (req, res
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+// ----------------------
+// VERIFY OTP
+// ----------------------
+router.post('/verify-otp', protect, async (req, res) => {
+  const { otp } = req.body;
+  const userEmail = req.user?.email; // From JWT token
+  if (!otp) return res.status(400).json({ message: 'OTP is required' });
+
+  try {
+    const user = await User.findOne({ email: userEmail });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (!user.otp || !user.otpExpires) {
+      return res.status(400).json({ message: 'No OTP generated. Please request again.' });
+    }
+
+    // Check expiry
+    if (user.otpExpires < Date.now()) {
+      user.otp = null;
+      user.otpExpires = null;
+      await user.save();
+      return res.status(400).json({ message: 'OTP expired. Please request a new one.' });
+    }
+
+    // Check match
+    if (user.otp !== otp.trim()) {
+      return res.status(400).json({ message: 'Invalid OTP. Please check and try again.' });
+    }
+
+    // Success
+    user.otp = null; // Clear OTP after verification
+    user.otpExpires = null;
+    await user.save();
+
+    res.json({ message: 'OTP verified successfully' });
+  } catch (err) {
+    console.error('OTP verification error:', err);
+    res.status(500).json({ message: 'Server error during OTP verification' });
   }
 });
 

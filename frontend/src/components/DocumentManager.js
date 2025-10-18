@@ -1,11 +1,12 @@
-// src/components/DocumentManager.js
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, List, CircularProgress, Button } from '@mui/material';
+import { Box, Typography, List, CircularProgress, Button, Chip } from '@mui/material';
 import DocumentUploadItem from './DocumentUploadItem';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import axios from 'axios';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import OTPVerificationForm from './OTPVerificationForm'; // ✅ Imported external form
 
 const requiredDocs = [
   { name: 'Aadhaar Card' },
@@ -17,53 +18,56 @@ const requiredDocs = [
 const DocumentManager = () => {
   const [userDocuments, setUserDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // --- FIX 1: Only need useNotification for displaying errors ---
-  const { showNotification } = useNotification();
-  const { user } = useAuth(); // We'll use this to check if the user is logged in
-  
-  const token = localStorage.getItem('authToken'); // --- FIX 2: Get token directly from localStorage ---
+  const [isUploadAuthorized, setIsUploadAuthorized] = useState(false); // default false
 
+  const { showNotification } = useNotification();
+  const { user } = useAuth();
+  const token = localStorage.getItem('authToken');
+
+  // ✅ Step 1: When OTP is verified, unlock uploads
+  const handleVerificationSuccess = () => {
+    setIsUploadAuthorized(true);
+  };
+
+  // ✅ Step 2: Fetch uploaded documents
   const fetchDocuments = useCallback(async () => {
     setIsLoading(true);
 
-    // --- CRITICAL FIX 3: Check for token existence before proceeding ---
     if (!token) {
-        setIsLoading(false);
-        showNotification("Authentication token missing. Please log in.", "error");
-        return; // Stop the function if token is not found
+      setIsLoading(false);
+      showNotification("Authentication token missing.", "error");
+      return;
     }
-    
+
     try {
       const response = await axios.get('http://localhost:8080/api/employee/documents', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
-      // Assuming the backend sends an array of documents in response.data.documents
-      setUserDocuments(response.data.documents); 
+
+      setUserDocuments(response.data.documents || []);
     } catch (error) {
       console.error("Failed to fetch documents", error);
       showNotification("Could not load your documents. API endpoint may be missing.", "error");
     } finally {
       setIsLoading(false);
     }
-  }, [token, showNotification]); // token must be in dependencies of useCallback
+  }, [token, showNotification]);
 
-  // FIX 4: Only call fetchDocuments if the user object exists (to avoid early calls)
   useEffect(() => {
     if (user) {
       fetchDocuments();
     }
-  }, [user, fetchDocuments]); // user dependency ensures the fetch runs after login
+  }, [user, fetchDocuments]);
 
+  // ✅ Step 3: Map required documents to uploaded list
   const documentsToDisplay = requiredDocs.map(reqDoc => {
-    // Merge the required document with any document found in the userDocuments state
     const uploadedDoc = userDocuments.find(upDoc => upDoc.name === reqDoc.name);
     return uploadedDoc ? uploadedDoc : { ...reqDoc, status: 'Not Uploaded' };
   });
 
   return (
     <Box>
+      {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Typography variant="body2" color="textSecondary">
           Upload required documents and track their verification status.
@@ -78,6 +82,22 @@ const DocumentManager = () => {
         </Button>
       </Box>
 
+      {/* OTP Section */}
+      {isUploadAuthorized ? (
+        <Chip
+          label="Uploads Authorized"
+          color="success"
+          icon={<VerifiedUserIcon />}
+          sx={{ mb: 2 }}
+        />
+      ) : (
+        <OTPVerificationForm
+          onVerificationSuccess={handleVerificationSuccess}
+          employeeEmail={user?.email}
+        />
+      )}
+
+      {/* Document Upload List */}
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
@@ -85,11 +105,11 @@ const DocumentManager = () => {
       ) : (
         <List>
           {documentsToDisplay.map((doc) => (
-            // Pass the onUploadSuccess function down to refresh the list after a successful upload
-            <DocumentUploadItem 
-              key={doc.name} 
-              doc={doc} 
+            <DocumentUploadItem
+              key={doc.name}
+              doc={doc}
               onUploadSuccess={fetchDocuments}
+              isUploadAuthorized={isUploadAuthorized}
             />
           ))}
         </List>
@@ -99,3 +119,4 @@ const DocumentManager = () => {
 };
 
 export default DocumentManager;
+

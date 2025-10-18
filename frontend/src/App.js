@@ -10,7 +10,8 @@ import DashboardPage from './pages/DashboardPage';
 import AdminPage from './pages/AdminPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-import DocumentVerificationPanel from './components/DocumentVerificationPanel'; // <-- Added here
+import DocumentVerificationPanel from './components/DocumentVerificationPanel'; 
+import HomePage from './pages/HomePage'; // <-- Imported
 
 // Import your route protectors
 import ProtectedRoute from './components/ProtectedRoute';
@@ -30,44 +31,41 @@ import CssBaseline from '@mui/material/CssBaseline';
 // -------------------------------------------------------------------
 const theme = createTheme({
   palette: {
-    // Primary: A deep, professional blue (associated with reliability)
     primary: {
       main: '#2C3E50', // Deep Navy Blue
     },
-    // Secondary: A subtle, modern highlight color (e.g., teal)
     secondary: {
       main: '#16A085', // Professional Teal
     },
     background: {
       default: '#F8F9FA', // A soft, light-grey background for the entire app
-      paper: '#FFFFFF', // Pure white for Cards and Tables
+      paper: '#FFFFFF', 
     },
   },
   typography: {
     fontFamily: [
-      'Roboto', // Fallback
+      'Roboto', 
       '"Segoe UI"',
       'Arial',
       'sans-serif',
     ].join(','),
     h4: {
-      fontWeight: 600, // Make section headers bolder
+      fontWeight: 600, 
     },
   },
-  // Apply subtle shadows and styles to Mui components globally
   components: {
-    MuiPaper: { // Applies to Cards and Paper components
+    MuiPaper: {
       styleOverrides: {
         root: {
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)', // Soft, light shadow for depth
-          borderRadius: 8, // Slightly rounded corners
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)', 
+          borderRadius: 8, 
         },
       },
     },
     MuiButton: {
       styleOverrides: {
         root: {
-          textTransform: 'none', // Professional standard: don't auto-capitalize buttons
+          textTransform: 'none', 
           borderRadius: 6,
         },
       },
@@ -87,13 +85,16 @@ function App() {
         <AuthProvider>
           <Router>
             <Routes>
-              {/* --- Public Routes --- */}
+              {/* --- NEW: LANDING PAGE (Root Path) --- */}
+              <Route path="/" element={<HomePage />} /> 
+              
+              {/* Public Routes (For Forms) */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
-              {/* --- Protected Employee Dashboard --- */}
+              {/* Protected Employee Dashboard */}
               <Route
                 path="/dashboard"
                 element={
@@ -103,7 +104,7 @@ function App() {
                 }
               />
 
-              {/* --- Protected Admin Panel Routes --- */}
+              {/* Protected Admin Panel Routes */}
               <Route
                 path="/admin"
                 element={
@@ -112,7 +113,6 @@ function App() {
                   </AdminRoute>
                 }
               />
-              {/* --- Document Verification Route (Must be inside <Routes>) --- */}
               <Route
                 path="/admin/verify/:employeeId"
                 element={
@@ -122,8 +122,8 @@ function App() {
                 }
               />
               
-              {/* Default route */}
-              <Route path="*" element={<Navigate to="/dashboard" />} />
+              {/* Default route: If an unknown path is hit, redirect to the landing page */}
+              <Route path="*" element={<Navigate to="/" />} /> 
             </Routes>
           </Router>
         </AuthProvider>
