@@ -7,7 +7,7 @@ const DocumentSchema = new mongoose.Schema({
   size: Number,
   status: {
     type: String,
-    enum: ['Pending', 'Approved', 'Rejected'],
+    enum: ['Pending', 'Approved', 'Rejected','Verified'],
     default: 'Pending'
   },
   remarks: String, // Optional HR/SuperAdmin remarks
@@ -20,7 +20,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true, select: false },
 
   // Roles: employee / hr / admin / superadmin
-  role: { type: String, enum: ['employee', 'hr', 'admin', 'superadmin'], default: 'employee' },
+  role: { type: String, enum: ['employee', 'hr', 'admin', 'superAdmin'], default: 'employee' },
 
   // OTP for email verification or HR flow
   otp: String,

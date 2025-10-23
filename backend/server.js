@@ -58,5 +58,8 @@ app.use('/api/hr', hrRoutes);
 
 //changed 
 app.use('/api/admin', hrRoutes);
+//superAdmin
+const superAdmin=require('./routes/superAdmin');
+app.use('/api/superAdmin',superAdmin);
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
