@@ -5,15 +5,9 @@ import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import GroupIcon from '@mui/icons-material/Group';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 
-// --- Mock Data ---
-// This information would typically come from the backend.
-const mockJobDetails = {
-  designation: 'Software Engineer',
-  department: 'Technology',
-  reportingManager: 'Mr. John Smith',
-};
+const JobDetails = ({ employee }) => {
+  if (!employee) return null; // avoid errors if no data
 
-const JobDetails = () => {
   return (
     <>
       <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
@@ -24,19 +18,28 @@ const JobDetails = () => {
           <ListItemIcon>
             <BusinessCenterIcon />
           </ListItemIcon>
-          <ListItemText primary="Designation" secondary={mockJobDetails.designation} />
+          <ListItemText
+            primary="Designation"
+            secondary={employee.designation || 'Pending HR assignment'}
+          />
         </ListItem>
         <ListItem>
           <ListItemIcon>
             <GroupIcon />
           </ListItemIcon>
-          <ListItemText primary="Department" secondary={mockJobDetails.department} />
+          <ListItemText
+            primary="Department"
+            secondary={employee.department || 'Pending HR assignment'}
+          />
         </ListItem>
         <ListItem>
           <ListItemIcon>
             <SupervisorAccountIcon />
           </ListItemIcon>
-          <ListItemText primary="Reporting Manager" secondary={mockJobDetails.reportingManager} />
+          <ListItemText
+            primary="Reporting Manager"
+            secondary={employee.reportingManager || 'Pending HR assignment'}
+          />
         </ListItem>
       </List>
     </>

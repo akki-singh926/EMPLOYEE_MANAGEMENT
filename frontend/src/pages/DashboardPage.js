@@ -1,9 +1,9 @@
 // src/pages/DashboardPage.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Container, Button, AppBar, Toolbar,
-  Grid, Card, CardContent, CardHeader, Avatar, Chip, Divider, 
-  useTheme, Paper, IconButton, Tooltip, Badge
+  Grid, Card, CardContent, CardHeader, Avatar, Chip, Divider,
+  useTheme, Paper, CircularProgress
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,21 +13,27 @@ import WorkIcon from '@mui/icons-material/Work';
 import DescriptionIcon from '@mui/icons-material/Description';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import DashboardIcon from '@mui/icons-material/Dashboard';
 import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
+import WavingHandIcon from '@mui/icons-material/WavingHand';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import EmailIcon from '@mui/icons-material/Email';
+import BadgeIcon from '@mui/icons-material/Badge';
 
 // Import Components
 import { useAuth } from '../context/AuthContext';
 import PersonalInformationForm from '../components/PersonalInformationForm';
 import DocumentManager from '../components/DocumentManager';
 import JobDetails from '../components/JobDetails';
+import axios from 'axios';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const theme = useTheme(); 
-  
-  const [refreshTrigger, setRefreshTrigger] = useState(0); 
+  const theme = useTheme();
+
+  const [employeeData, setEmployeeData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   const handleLogout = () => {
     logout();
@@ -36,85 +42,141 @@ const DashboardPage = () => {
 
   const triggerDataRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
+    fetchEmployeeData();
   };
 
   const getRoleColor = (role) => {
-    switch(role) {
-      case 'superadmin': return '#1e40af';
-      case 'admin': return '#7c3aed';
-      case 'hr': return '#dc2626';
-      default: return '#059669';
+    switch (role) {
+      case 'superadmin': return 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+      case 'admin': return 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)';
+      case 'hr': return 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)';
+      default: return 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
     }
   };
 
-  // Determine the final name for the welcome header, prioritizing 'name' field
-  const userName = user?.name || user?.employeeId || 'Employee';
+  const userName = employeeData?.name || user?.employeeId || 'Employee';
+
+  // Fetch employee info
+  const fetchEmployeeData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error("No auth token found.");
+
+      const response = await axios.get('http://localhost:8080/api/employee/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const data = response.data.data || response.data;
+      setEmployeeData(data);
+
+    } catch (error) {
+      console.error('Failed to fetch employee data:', error);
+      setEmployeeData(user);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) fetchEmployeeData();
+  }, [user]);
+
+  if (loading || !employeeData) {
+    return (
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          justifyContent: 'center', 
+          alignItems: 'center',
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
+        }}
+      >
+        <CircularProgress size={60} thickness={4} sx={{ color: '#10b981' }} />
+        <Typography variant="h6" sx={{ mt: 3, color: '#059669', fontWeight: 600 }}>
+          Loading your dashboard...
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ 
-      minHeight: '100vh',
-      bgcolor: theme.palette.background.default
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #dbeafe 100%)',
+      position: 'relative',
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '300px',
+        background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, transparent 100%)',
+        pointerEvents: 'none'
+      }
     }}>
-      {/* Professional AppBar */}
+      
+      {/* Navbar */}
       <AppBar 
         position="static" 
-        elevation={0}
+        elevation={0} 
         sx={{ 
-          bgcolor: '#ffffff',
-          borderBottom: '1px solid #e5e7eb'
+          background: 'linear-gradient(90deg, #ffffff 0%, #f9fafb 100%)',
+          borderBottom: '2px solid #e5e7eb',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
         }}
       >
-        <Toolbar sx={{ py: 1.5, px: { xs: 2, sm: 3 } }}>
-          <BusinessCenterIcon sx={{ mr: 1.5, color: '#1e40af', fontSize: 30 }} />
-          <Typography 
-            variant="h6" 
-            component="div" 
-            sx={{ 
-              fontWeight: 600,
-              color: '#111827',
-              letterSpacing: '-0.025em'
-            }}
-          >
-            Employee Management Portal
+        <Toolbar sx={{ py: 1.5, px: { xs: 2, sm: 4 } }}>
+          <Box sx={{
+            display: 'flex',
+            alignItems: 'center',
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            borderRadius: '12px',
+            p: 1,
+            mr: 2,
+            boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
+          }}>
+            <BusinessCenterIcon sx={{ color: 'white', fontSize: 28 }} />
+          </Box>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#111827' }}>
+            Employee Portal
           </Typography>
-          
+
           <Box sx={{ flexGrow: 1 }} />
-          
-          {/* Admin Panel Button Visibility Check */}
+
           {(user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'hr') && (
             <Button 
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate('/admin')} 
               startIcon={<AdminPanelSettingsIcon />}
               sx={{ 
-                mr: 2,
-                textTransform: 'none',
-                fontWeight: 500,
-                color: '#374151',
-                bgcolor: '#f3f4f6',
-                px: 2,
-                '&:hover': {
-                  bgcolor: '#e5e7eb'
-                }
+                mr: 2, 
+                textTransform: 'none', 
+                fontWeight: 600, 
+                color: 'white',
+                background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                px: 3, py: 1,
+                borderRadius: '10px',
               }}
             >
               Admin Panel
             </Button>
           )}
 
-          {/* Logout Button */}
           <Button 
-            onClick={handleLogout}
-            startIcon={<LogoutIcon />}
+            onClick={handleLogout} 
+            startIcon={<LogoutIcon />} 
             variant="outlined"
             sx={{ 
-              textTransform: 'none',
-              fontWeight: 500,
-              borderColor: '#d1d5db',
+              textTransform: 'none', 
+              fontWeight: 600, 
+              borderColor: '#d1d5db', 
               color: '#374151',
-              '&:hover': {
-                borderColor: '#9ca3af',
-                bgcolor: '#f9fafb'
-              }
+              px: 3, py: 1,
+              borderRadius: '10px',
             }}
           >
             Logout
@@ -122,192 +184,90 @@ const DashboardPage = () => {
         </Toolbar>
       </AppBar>
 
-      <Container component="main" maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
-        {/* Professional Header Card */}
-        <Paper 
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
+        
+        {/* Welcome Section */}
+        <Paper
           elevation={0}
-          sx={{ 
-            mb: 4,
-            p: 3,
-            bgcolor: '#ffffff',
-            border: '1px solid #e5e7eb',
-            borderRadius: 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 3
+          sx={{
+            p: 4,
+            borderRadius: '24px',
+            border: '2px solid #e5e7eb',
+            background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.08)'
           }}
         >
-          <Avatar 
-            sx={{ 
-              width: 72, 
-              height: 72,
-              bgcolor: getRoleColor(user?.role),
-              fontSize: '1.75rem',
-              fontWeight: 600
-            }}
-          >
-            {user?.name?.charAt(0)?.toUpperCase() || 'E'}
-          </Avatar>
-          <Box sx={{ flexGrow: 1 }}>
-            {/* FINAL WELCOME MESSAGE FIX: Prioritizes name, then Employee ID */}
-            <Typography 
-              variant="h5" 
-              component="h1" 
-              sx={{ 
-                fontWeight: 600,
-                color: '#111827',
-                mb: 0.5
-              }}
-            >
-              Welcome, {userName}
-            </Typography>
-            
-            <Typography variant="body2" sx={{ color: '#6b7280', fontWeight: 400, mb: 0.5 }}>
-              Employee ID: {user?.employeeId || user?.id || 'N/A'} • {user?.email || 'email@company.com'}
-            </Typography>
-            
-            <Typography variant="caption" sx={{ color: '#9ca3af' }}>
-              {new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </Typography>
-          </Box>
-          {/* Displaying Role Chip */}
-          {user?.role && (
-            <Chip 
-              label={user.role.toUpperCase()} 
-              sx={{ 
-                bgcolor: getRoleColor(user?.role),
-                color: 'white',
-                fontWeight: 600,
-                fontSize: '0.75rem',
-                height: 28
-              }}
-            />
-          )}
+          <Grid container spacing={3} alignItems="center">
+            <Grid item>
+              <Avatar 
+                sx={{
+                  width: 80, height: 80,
+                  background: getRoleColor(employeeData?.role),
+                  fontSize: '2.3rem', fontWeight: 700,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+                }}
+              >
+                {employeeData?.name?.charAt(0)?.toUpperCase() || 'E'}
+              </Avatar>
+            </Grid>
+            <Grid item xs>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <WavingHandIcon sx={{ color: '#f59e0b' }} />
+                <Typography variant="h4" sx={{ fontWeight: 800, color: '#111827' }}>
+                  Welcome Back, {userName}!
+                </Typography>
+              </Box>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600 }}>Employee ID</Typography>
+                  <Typography variant="body2" sx={{ color: '#111827', fontWeight: 600 }}>
+                    {employeeData?.employeeId || employeeData?.id || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600 }}>Email</Typography>
+                  <Typography variant="body2" sx={{ color: '#111827', fontWeight: 600 }}>
+                    {employeeData?.email || 'email@company.com'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600 }}>Today</Typography>
+                  <Typography variant="body2" sx={{ color: '#111827', fontWeight: 600 }}>
+                    {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Grid>
+            <Grid item>
+              {employeeData?.role && (
+                <Chip 
+                  label={employeeData.role.toUpperCase()} 
+                  sx={{ background: getRoleColor(employeeData.role), color: 'white', fontWeight: 700 }}
+                />
+              )}
+            </Grid>
+          </Grid>
         </Paper>
 
-        {/* Main Content Sections */}
-        <Grid container spacing={3}>
-          
-          {/* Personal Information Section */}
-          <Grid item xs={12} lg={6}>
-            <Card 
-              elevation={0}
-              sx={{ 
-                border: '1px solid #e5e7eb', 
-                bgcolor: '#ffffff',
-                borderRadius: 1,
-                height: '100%'
-              }}
-            >
-              <CardHeader 
-                avatar={
-                  <Box sx={{ width: 40, height: 40, borderRadius: 1, bgcolor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <PersonIcon sx={{ color: '#1e40af', fontSize: 24 }} />
-                  </Box>
-                }
-                title={
-                  <Typography variant="h6" fontWeight={600} sx={{ color: '#111827' }}>
-                    Personal Information
-                  </Typography>
-                }
-                subheader={
-                  <Typography variant="body2" sx={{ color: '#6b7280' }}>
-                    Manage your personal details
-                  </Typography>
-                }
-                sx={{ pb: 1 }}
-              />
-              <Divider />
-              <CardContent sx={{ pt: 3 }}>
-                <PersonalInformationForm onUpdateSuccess={triggerDataRefresh} /> 
-              </CardContent>
-            </Card>
+        {/* Personal Info + Job Details */}
+        <Grid container spacing={4} sx={{ mt: 3 }}>
+          <Grid item xs={12} md={6}>
+            <PersonalInformationForm onUpdateSuccess={triggerDataRefresh} />
           </Grid>
-
-          {/* Job Details Section */}
-          <Grid item xs={12} lg={6}>
-            <Card 
-              elevation={0}
-              sx={{ 
-                border: '1px solid #e5e7eb', 
-                bgcolor: '#ffffff', 
-                borderRadius: 1,
-                height: '100%'
-              }}
-            >
-              <CardHeader 
-                avatar={
-                  <Box sx={{ width: 40, height: 40, borderRadius: 1, bgcolor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <WorkIcon sx={{ color: '#059669', fontSize: 24 }} />
-                  </Box>
-                }
-                title={
-                  <Typography variant="h6" fontWeight={600} sx={{ color: '#111827' }}>
-                    Employee Summary & Job Details
-                  </Typography>
-                }
-                subheader={
-                  <Typography variant="body2" sx={{ color: '#6b7280' }}>
-                    View your job information
-                  </Typography>
-                }
-                sx={{ pb: 1 }}
-              />
-              <Divider />
-              <CardContent sx={{ pt: 3 }}>
-                <JobDetails key={refreshTrigger} />
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          {/* Document Management Section */}
-          <Grid item xs={12}>
-            <Card 
-              elevation={0}
-              sx={{ 
-                border: '1px solid #e5e7eb', 
-                bgcolor: '#ffffff',
-                borderRadius: 1
-              }}
-            >
-              <CardHeader 
-                avatar={
-                  <Box sx={{ width: 40, height: 40, borderRadius: 1, bgcolor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <DescriptionIcon sx={{ color: '#d97706', fontSize: 24 }} />
-                  </Box>
-                }
-                title={
-                  <Typography variant="h6" fontWeight={600} sx={{ color: '#111827' }}>
-                    Document Management
-                  </Typography>
-                }
-                subheader={
-                  <Typography variant="body2" sx={{ color: '#6b7280' }}>
-                    Upload and manage your employment documents
-                  </Typography>
-                }
-                sx={{ pb: 1 }}
-              />
-              <Divider />
-              <CardContent sx={{ pt: 3 }}>
-                <DocumentManager key={`docs-${refreshTrigger}`} onUploadSuccess={triggerDataRefresh} />
-              </CardContent>
-            </Card>
+          <Grid item xs={12} md={6}>
+            <JobDetails key={refreshTrigger} employee={employeeData} />
           </Grid>
         </Grid>
 
+        {/* Document Manager */}
+        <Box sx={{ mt: 6 }}>
+          <DocumentManager key={`docs-${refreshTrigger}`} onUploadSuccess={triggerDataRefresh} />
+        </Box>
+
         {/* Footer */}
-        <Box sx={{ mt: 5, pt: 3, borderTop: '1px solid #e5e7eb' }}>
-          <Typography variant="body2" align="center" sx={{ color: '#6b7280' }}>
-            For assistance, contact HR at <strong>hr@company.com</strong> or <strong>+1 (555) 123-4567</strong>
-          </Typography>
-          <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: '#9ca3af' }}>
-            © 2025 Employee Management System. All rights reserved.
+        <Box sx={{ mt: 5, textAlign: 'center' }}>
+          <Typography variant="body2" sx={{ color: '#6b7280' }}>
           </Typography>
         </Box>
       </Container>

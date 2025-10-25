@@ -11,7 +11,11 @@ import AdminPage from './pages/AdminPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import DocumentVerificationPanel from './components/DocumentVerificationPanel'; 
-import HomePage from './pages/HomePage'; // <-- Imported
+import HomePage from './pages/HomePage'; 
+
+// NEW: Assume SuperAdminPage and its Route Guard exist
+import SuperAdminPage from './pages/SuperAdminPage'; 
+import SuperAdminRoute from './components/SuperAdminRoute'; 
 
 // Import your route protectors
 import ProtectedRoute from './components/ProtectedRoute';
@@ -104,7 +108,7 @@ function App() {
                 }
               />
 
-              {/* Protected Admin Panel Routes */}
+              {/* Protected Admin/HR Panel (Unified Management) */}
               <Route
                 path="/admin"
                 element={
@@ -119,6 +123,17 @@ function App() {
                   <AdminRoute>
                     <DocumentVerificationPanel />
                   </AdminRoute>
+                }
+              />
+              
+              {/* --- CRITICAL FIX: Protected Super Admin Panel --- */}
+              {/* We use a dedicated SuperAdminRoute to enforce the highest security */}
+              <Route
+                path="/superadmin"
+                element={
+                  <SuperAdminRoute> 
+                    <SuperAdminPage /> 
+                  </SuperAdminRoute>
                 }
               />
               

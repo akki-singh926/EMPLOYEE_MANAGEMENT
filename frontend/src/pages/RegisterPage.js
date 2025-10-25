@@ -17,11 +17,7 @@ import { useNotification } from '../context/NotificationContext';
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
-    fullName: '',
-    employeeId: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
+    fullName: '', employeeId: '', email: '', password: '', confirmPassword: '',
   });
   
   const [showPassword, setShowPassword] = useState(false);
@@ -33,13 +29,12 @@ const RegisterPage = () => {
 
   const { fullName, employeeId, email, password, confirmPassword } = formData;
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFormData(prevState => ({ ...prevState, [name]: value }));
+  const handleChange = (e) => {
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleRegister = async (event) => {
-    event.preventDefault();
+  const handleRegister = async (e) => {
+    e.preventDefault();
     setError('');
 
     if (password !== confirmPassword) {
@@ -61,57 +56,80 @@ const RegisterPage = () => {
       navigate('/login');
 
     } catch (apiError) {
-      console.error('Registration failed:', apiError.response);
-
-      const message = apiError.response?.data?.message || apiError.response?.data?.errors[0]?.msg || 'Registration failed. Please check details.';
+      const message = apiError.response?.data?.message || apiError.response?.data?.errors[0]?.msg || 'Registration failed.';
       setError(message);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const inputStyle = {
+    '& .MuiOutlinedInput-root': {
+      bgcolor: '#f9fafb',
+      borderRadius: '14px',
+      fontWeight: 600,
+      '& fieldset': { borderColor: '#e5e7eb', borderWidth: '2px' },
+      '&:hover fieldset': { borderColor: '#10b981', borderWidth: '2px' },
+      '&.Mui-focused fieldset': { borderColor: '#10b981', borderWidth: '2px' },
+    },
+    '& .MuiInputLabel-root': { fontWeight: 600, color: '#6b7280' },
+    '& .MuiInputLabel-root.Mui-focused': { color: '#10b981' }
+  };
+
   return (
     <Box sx={{ 
       minHeight: '100vh',
-      bgcolor: '#f5f7fa',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      py: 4
+      background: 'linear-gradient(135deg, #f0fdf4 0%, #dbeafe 50%, #fce4ec 100%)',
+      py: { xs: 3, sm: 4 },
+      px: 2
     }}>
-      <Container component="main" maxWidth="xs">
-        {/* Header Section */}
+      <Container maxWidth="sm">
+        {/* Header */}
         <Box sx={{ textAlign: 'center', mb: 4 }}>
           <Box sx={{ 
-            width: 64, 
-            height: 64, 
-            bgcolor: '#3b82f6',
-            borderRadius: 2,
+            width: { xs: 70, sm: 80 }, 
+            height: { xs: 70, sm: 80 }, 
+            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+            borderRadius: '20px',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'center', 
             justifyContent: 'center',
-            margin: '0 auto',
-            mb: 2
+            margin: '0 auto', 
+            mb: 3,
+            boxShadow: '0 8px 30px rgba(139, 92, 246, 0.35)',
+            border: '4px solid white'
           }}>
-            <BusinessIcon sx={{ fontSize: 32, color: 'white' }} />
+            <BusinessIcon sx={{ fontSize: { xs: 40, sm: 48 }, color: 'white' }} />
           </Box>
-          
-          <Typography variant="h4" fontWeight={700} color="#1e293b" gutterBottom>
+          <Typography variant="h3" fontWeight={900} sx={{ 
+            color: '#111827',
+            letterSpacing: '-0.5px',
+            fontSize: { xs: '1.8rem', sm: '2.5rem' },
+            mb: 1
+          }}>
             Create Account
           </Typography>
-          
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="h6" sx={{ 
+            color: '#6b7280', 
+            fontWeight: 600,
+            fontSize: { xs: '0.95rem', sm: '1.1rem' }
+          }}>
             Join our employee management system
           </Typography>
         </Box>
 
-        {/* Registration Form Card */}
+        {/* Registration Card */}
         <Paper 
           elevation={0}
           sx={{ 
-            p: 4,
-            border: '1px solid #e2e8f0',
-            bgcolor: 'white'
+            p: { xs: 3, sm: 4, md: 5 },
+            border: '3px solid #e5e7eb',
+            bgcolor: 'white',
+            borderRadius: '28px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.12)'
           }}
         >
           <Box component="form" onSubmit={handleRegister}>
@@ -126,17 +144,11 @@ const RegisterPage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <PersonOutlineIcon sx={{ color: '#64748b' }} />
+                    <PersonOutlineIcon sx={{ color: '#8b5cf6', fontSize: 24 }} />
                   </InputAdornment>
                 ),
               }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': {
-                    borderColor: '#3b82f6',
-                  },
-                }
-              }}
+              sx={inputStyle}
             />
 
             <TextField 
@@ -150,17 +162,11 @@ const RegisterPage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <BadgeOutlinedIcon sx={{ color: '#64748b' }} />
+                    <BadgeOutlinedIcon sx={{ color: '#8b5cf6', fontSize: 24 }} />
                   </InputAdornment>
                 ),
               }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': {
-                    borderColor: '#3b82f6',
-                  },
-                }
-              }}
+              sx={inputStyle}
             />
 
             <TextField 
@@ -175,17 +181,11 @@ const RegisterPage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <EmailOutlinedIcon sx={{ color: '#64748b' }} />
+                    <EmailOutlinedIcon sx={{ color: '#8b5cf6', fontSize: 24 }} />
                   </InputAdornment>
                 ),
               }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': {
-                    borderColor: '#3b82f6',
-                  },
-                }
-              }}
+              sx={inputStyle}
             />
 
             <TextField 
@@ -200,27 +200,18 @@ const RegisterPage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LockOutlinedIcon sx={{ color: '#64748b' }} />
+                    <LockOutlinedIcon sx={{ color: '#8b5cf6', fontSize: 24 }} />
                   </InputAdornment>
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                    >
+                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
                       {showPassword ? <VisibilityOffOutlinedIcon /> : <VisibilityOutlinedIcon />}
                     </IconButton>
                   </InputAdornment>
                 ),
               }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': {
-                    borderColor: '#3b82f6',
-                  },
-                }
-              }}
+              sx={inputStyle}
             />
 
             <TextField 
@@ -235,38 +226,28 @@ const RegisterPage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LockOutlinedIcon sx={{ color: '#64748b' }} />
+                    <LockOutlinedIcon sx={{ color: '#8b5cf6', fontSize: 24 }} />
                   </InputAdornment>
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      edge="end"
-                    >
+                    <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end">
                       {showConfirmPassword ? <VisibilityOffOutlinedIcon /> : <VisibilityOutlinedIcon />}
                     </IconButton>
                   </InputAdornment>
                 ),
               }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': {
-                    borderColor: '#3b82f6',
-                  },
-                }
-              }}
+              sx={inputStyle}
             />
             
             {error && (
-              <Alert 
-                severity="error" 
-                sx={{ 
-                  mt: 2,
-                  border: '1px solid #fecaca',
-                  bgcolor: '#fef2f2'
-                }}
-              >
+              <Alert severity="error" sx={{ 
+                mt: 3,
+                border: '2px solid #fecaca',
+                bgcolor: '#fef2f2',
+                borderRadius: '14px',
+                fontWeight: 600
+              }}>
                 {error}
               </Alert>
             )}
@@ -276,44 +257,58 @@ const RegisterPage = () => {
               fullWidth 
               variant="contained" 
               sx={{ 
-                mt: 3, 
+                mt: 4, 
                 mb: 2,
-                bgcolor: '#3b82f6',
-                py: 1.2,
+                background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                py: 1.8,
                 textTransform: 'none',
-                fontSize: '1rem',
-                fontWeight: 600,
-                boxShadow: 'none',
+                fontSize: { xs: '1rem', sm: '1.1rem' },
+                fontWeight: 800,
+                borderRadius: '14px',
+                boxShadow: '0 6px 20px rgba(139, 92, 246, 0.3)',
+                border: '2px solid rgba(255,255,255,0.2)',
                 '&:hover': {
-                  bgcolor: '#2563eb',
-                  boxShadow: 'none'
+                  boxShadow: '0 8px 30px rgba(139, 92, 246, 0.5)',
+                  transform: 'translateY(-3px)',
+                  transition: 'all 0.3s ease'
+                },
+                '&:disabled': {
+                  background: '#e5e7eb',
+                  color: '#9ca3af'
                 }
               }} 
               disabled={isLoading}
             >
-              {isLoading ? <CircularProgress size={24} color="inherit" /> : 'Create Account'}
+              {isLoading ? <CircularProgress size={28} sx={{ color: 'white' }} /> : 'Create Account'}
             </Button>
             
-            <Box textAlign='center'>
+            <Box textAlign='center' sx={{ mt: 2 }}>
               <RouterLink 
                 to="/login"
                 style={{
                   textDecoration: 'none',
-                  color: '#3b82f6',
-                  fontSize: '0.875rem',
-                  fontWeight: 500
+                  color: '#8b5cf6',
+                  fontSize: '0.95rem',
+                  fontWeight: 700
                 }}
               >
-                Already have an account? Sign In
+                Already have an account? Sign In →
               </RouterLink>
             </Box>
           </Box>
         </Paper>
 
         {/* Footer */}
-        <Box sx={{ mt: 3, textAlign: 'center' }}>
-          <Typography variant="caption" color="text.secondary">
-            Secure Registration • Protected Information
+        <Box sx={{ mt: 4, textAlign: 'center' }}>
+          <Typography variant="body1" sx={{ color: '#374151', fontWeight: 700 }}>
+            © 2025 Employee Management System
+          </Typography>
+          <Typography variant="body2" sx={{ 
+            mt: 1,
+            color: '#6b7280',
+            fontWeight: 600
+          }}>
+            🔒 Secure Registration • Protected Information
           </Typography>
         </Box>
       </Container>

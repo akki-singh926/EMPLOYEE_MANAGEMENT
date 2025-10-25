@@ -4,8 +4,8 @@ import {
   Box, Typography, Container, Button, AppBar, Toolbar, 
   Paper, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, TextField, InputAdornment, Grid, 
-  CircularProgress, Chip, Alert, Card, CardContent, Divider,
-  Tooltip, IconButton, Badge
+  Chip, Alert, Card, CardContent,
+  Tooltip, IconButton
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
@@ -18,6 +18,8 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import PeopleIcon from '@mui/icons-material/People';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
 import UserFormModal from '../components/UserFormModal';
@@ -31,470 +33,564 @@ const AdminPage = () => {
   const [employees, setEmployees] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // States for Modal Management
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
-  // Helper to check if the current user has super delete privileges
   const hasSuperAdminRights = user?.role === 'superadmin';
 
-  // --- Statistics Calculation ---
+  // --- CORRECTED STATISTICS LOGIC ---
   const getStatistics = () => {
     const total = employees.length;
-    const approved = employees.filter(emp => emp.status === 'Approved').length;
-    const pending = employees.filter(emp => emp.status === 'Pending').length;
-    const admins = employees.filter(emp => ['admin', 'superadmin', 'hr'].includes(emp.role)).length;
     
-    return { total, approved, pending, admins };
+    // Count verified: all documents verified
+    const verified = employees.filter(emp => 
+      emp.documents?.length > 0 && 
+      emp.documents.every(d => d.status === 'Verified')
+    ).length;
+    
+    // Count pending: no documents OR has documents but not all verified
+    const pending = employees.filter(emp => 
+      !emp.documents || 
+      emp.documents.length === 0 || 
+      emp.documents.some(d => d.status !== 'Verified')
+    ).length;
+    
+    // Count admins and superadmins separately
+     const admins = employees.filter(emp => 
+      emp.role === 'admin' || emp.role === 'hr'
+    ).length;
+    
+    const superAdmins = employees.filter(emp => 
+      emp.role === 'superadmin' || emp.role === 'superAdmin'
+    ).length;
+    
+    return { total, verified, pending, admins, superAdmins };
   };
-
   const stats = getStatistics();
 
-  // --- SEND OTP LOGIC ---
-  const handleSendOTP = async (employeeEmail, employeeName) => {
-      if (!window.confirm(`Are you sure you want to send an OTP to ${employeeName} (${employeeEmail})?`)) return;
-      
-      const token = localStorage.getItem('authToken');
-      
-      try {
-          await axios.post('http://localhost:8080/api/hr/send-otp', 
-              { employeeEmail }, 
-              { headers: { Authorization: `Bearer ${token}` } }
-          );
 
-          showNotification(`OTP successfully sent to ${employeeName}.`, 'success');
-      } catch (error) {
-          console.error('OTP send failed:', error.response);
-          
-          let message = 'Failed to send OTP due to server error.';
-          if (error.response) {
-              const status = error.response.status;
-              message = error.response.data?.message || message;
-              
-              if (status === 404) {
-                  message = `Employee with email ${employeeEmail} not found.`;
-              } else if (status === 403) {
-                  message = "Access Denied: You do not have HR/Admin privileges.";
-              }
-          }
-          
-          showNotification(message, 'error');
-      }
+  // --- Send OTP ---
+  const handleSendOTP = async (employeeEmail, employeeName) => {
+    if (!window.confirm(`Send OTP to ${employeeName} (${employeeEmail})?`)) return;
+    const token = localStorage.getItem('authToken');
+    try {
+      await axios.post('http://localhost:8080/api/hr/send-otp', 
+        { employeeEmail }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      showNotification(`OTP sent to ${employeeName}.`, 'success');
+    } catch (error) {
+      const message = error.response?.data?.message || 'Failed to send OTP.';
+      showNotification(message, 'error');
+    }
   };
 
-  // --- FETCH EMPLOYEE LIST ---
+  // --- Fetch Employees ---
   const fetchEmployees = useCallback(async () => {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('authToken');
-      if (!token) throw new Error("Authentication failed.");
-
+      if (!token) throw new Error("Auth failed.");
       const response = await axios.get('http://localhost:8080/api/admin/employees', { 
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      setEmployees(response.data.data || []); 
+      setEmployees(response.data.data || []);
     } catch (error) {
-      console.error('Error fetching employee list:', error);
-      
       const errorMessage = error.response?.status === 403 
-        ? 'Access Denied: You must be an Admin/HR.' 
-        : 'Could not fetch employee list. The backend API may be missing.';
-      
+        ? 'Access Denied: Admin/HR only.' 
+        : 'Cannot fetch employee list.';
       showNotification(errorMessage, 'error');
     } finally {
       setIsLoading(false);
     }
-  }, [showNotification]); 
+  }, [showNotification]);
 
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  // --- DELETE LOGIC ---
+  // --- Delete User ---
   const handleDeleteUser = async (userId, userName, userRole) => {
     if (userRole === 'superadmin' && !hasSuperAdminRights) {
-        return showNotification("Unauthorized: Only a Superadmin can delete other Superadmins.", 'error');
+      return showNotification("Only Superadmin can delete other Superadmins.", 'error');
     }
-    
-    if (!window.confirm(`Are you sure you want to delete user ${userName} (${userId})? This action cannot be undone.`)) return;
-
+    if (!window.confirm(`Delete ${userName}? This cannot be undone.`)) return;
     const token = localStorage.getItem('authToken');
     try {
       await axios.delete(`http://localhost:8080/api/admin/employees/${userId}`, {
-          headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      showNotification(`User ${userName} deleted successfully.`, 'success');
+      showNotification(`${userName} deleted successfully.`, 'success');
       fetchEmployees();
     } catch (error) {
       showNotification(error.response?.data?.message || 'Failed to delete user.', 'error');
     }
   };
 
-  // --- SEARCH FILTER ---
+  // --- Export ---
+  const handleExport = () => {
+    showNotification("Export initiated.", 'info');
+  };
+
+  const getDisplayStatus = (documents) => {
+    if (!documents || documents.length === 0) return 'Not Uploaded';
+    if (documents.every(d => d.status === 'Verified')) return 'Final Verification Completed';
+    if (documents.some(d => d.status === 'Rejected')) return 'Rejected';
+    if (documents.some(d => d.status === 'Pending')) return 'Pending';
+    if (documents.some(d => d.status === 'Approved')) return 'Approved';
+    return 'Pending';
+  };
+
   const filteredEmployees = employees.filter(emp => 
     emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     emp.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const tableHeadings = [
-    { label: 'Employee ID', align: 'left' },
-    { label: 'Name', align: 'left' },
-    { label: 'Email Address', align: 'left' },
-    { label: 'Role', align: 'center' },
-    { label: 'Document Status', align: 'center' },
-    { label: 'Actions', align: 'right' },
-  ];
-
-  if (isLoading) {
-      return (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: '#f5f7fa' }}>
-              <CircularProgress size={60} thickness={4} />
-          </Box>
-      );
-  }
-
-  const employeesToDisplay = filteredEmployees.length > 0 ? filteredEmployees : (
-    employees.length === 0 ? [
-      { id: 'EMP001', name: 'John Doe', email: 'john@example.com', role: 'employee', status: 'Approved', employeeId: 'EMP001', _id: 'mock1' },
-      { id: 'EMP002', name: 'Jane Smith', email: 'jane@example.com', role: 'hr', status: 'Pending', employeeId: 'EMP002', _id: 'mock2' },
-    ] : []
-  );
-
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#f5f7fa' }}>
-      <AppBar position="static" elevation={0} sx={{ bgcolor: '#1e293b' }}>
-        <Toolbar>
-          <AdminPanelSettingsIcon sx={{ mr: 2, fontSize: 32 }} />
-          <Typography variant="h5" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
-            Admin Control Panel
-          </Typography>
+    <Box sx={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #dbeafe 100%)',
+      pb: 4
+    }}>
+      {/* AppBar */}
+      <AppBar 
+        position="static" 
+        elevation={0} 
+        sx={{ 
+          background: 'linear-gradient(90deg, #ffffff 0%, #f9fafb 100%)',
+          borderBottom: '2px solid #e5e7eb',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+        }}
+      >
+        <Toolbar sx={{ py: 1.5, px: { xs: 2, sm: 4 } }}>
+          <Box sx={{
+            display: 'flex',
+            alignItems: 'center',
+            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+            borderRadius: '12px',
+            p: 1,
+            mr: 2,
+            boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
+          }}>
+            <AdminPanelSettingsIcon sx={{ color: 'white', fontSize: 28 }} />
+          </Box>
+          <Box sx={{ flexGrow: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#111827', letterSpacing: '-0.025em' }}>
+              Admin Control Center
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 500 }}>
+              Manage Your Workforce
+            </Typography>
+          </Box>
           <Chip 
             label={user?.role?.toUpperCase() || 'ADMIN'} 
-            color="secondary" 
-            size="small" 
-            sx={{ mr: 2, fontWeight: 600 }} 
+            sx={{ 
+              mr: 2, 
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+              color: 'white',
+              letterSpacing: '1px',
+              boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
+            }} 
           />
           <Button 
-            color="inherit" 
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/dashboard')} 
+            variant="outlined"
             sx={{ 
-              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              borderColor: '#d1d5db',
+              borderWidth: '2px',
+              color: '#374151',
               px: 3,
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
+              py: 1,
+              borderRadius: '10px',
+              '&:hover': {
+                borderWidth: '2px',
+                borderColor: '#9ca3af',
+                bgcolor: '#f9fafb'
+              }
             }}
           >
             Dashboard
           </Button>
         </Toolbar>
       </AppBar>
-      
-      <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-        {/* Header Section */}
+
+      <Container maxWidth="xl" sx={{ mt: 4 }}>
+        {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, color: '#1e293b' }}>
-            Employee Management System
+          <Typography variant="h3" sx={{ 
+            fontWeight: 900, 
+            color: '#111827',
+            letterSpacing: '-0.5px',
+            mb: 1
+          }}>
+            Employee Management
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Manage your organization's workforce efficiently. Add, edit, verify documents, and send OTP credentials to employees.
+          <Typography variant="h6" sx={{ color: '#6b7280', fontWeight: 600 }}>
+            Streamline your workforce operations
           </Typography>
           
-          {/* Info Alert */}
           <Alert 
             severity="info" 
-            icon={<InfoOutlinedIcon />}
-            sx={{ mb: 3, borderRadius: 2 }}
+            icon={<InfoOutlinedIcon />} 
+            sx={{ 
+              mt: 3,
+              borderRadius: '16px',
+              border: '2px solid #bfdbfe',
+              bgcolor: '#eff6ff',
+              fontWeight: 600
+            }}
           >
-            <Typography variant="body2">
-              <strong>Quick Guide:</strong> Use the "Send OTP" button to email one-time passwords to employees. 
-              Click "Verify Docs" to review and approve employee documentation. Only superadmins can delete admin-level users.
-            </Typography>
+            Send OTP credentials, verify documents, and manage permissions. Superadmin required for admin deletions.
           </Alert>
         </Box>
 
         {/* Statistics Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} sm={6} md={3}>
-            <Card elevation={2} sx={{ borderRadius: 3, bgcolor: '#3b82f6', color: 'white' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                      {stats.total}
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                      Total Employees
-                    </Typography>
+            <Card elevation={0} sx={{ 
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              transition: 'all 0.3s ease',
+              '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 12px 30px rgba(102, 126, 234, 0.3)' }
+            }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box sx={{ 
+                    bgcolor: 'rgba(255, 255, 255, 0.2)', 
+                    borderRadius: '12px', 
+                    p: 1.5
+                  }}>
+                    <PeopleIcon sx={{ fontSize: 40 }} />
                   </Box>
-                  <PeopleIcon sx={{ fontSize: 48, opacity: 0.8 }} />
                 </Box>
+                <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
+                  {stats.total}
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Total Employees
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
-          
+
           <Grid item xs={12} sm={6} md={3}>
-            <Card elevation={2} sx={{ borderRadius: 3, bgcolor: '#10b981', color: 'white' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                      {stats.approved}
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                      Approved Documents
-                    </Typography>
+            <Card elevation={0} sx={{ 
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+              color: 'white',
+              transition: 'all 0.3s ease',
+              '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 12px 30px rgba(17, 153, 142, 0.3)' }
+            }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box sx={{ 
+                    bgcolor: 'rgba(255, 255, 255, 0.2)', 
+                    borderRadius: '12px', 
+                    p: 1.5
+                  }}>
+                    <VerifiedUserIcon sx={{ fontSize: 40 }} />
                   </Box>
-                  <VerifiedUserIcon sx={{ fontSize: 48, opacity: 0.8 }} />
                 </Box>
+                <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
+                  {stats.verified}
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Verified Documents
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
-          
+
           <Grid item xs={12} sm={6} md={3}>
-            <Card elevation={2} sx={{ borderRadius: 3, bgcolor: '#f59e0b', color: 'white' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                      {stats.pending}
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                      Pending Reviews
-                    </Typography>
+            <Card elevation={0} sx={{ 
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+              color: 'white',
+              transition: 'all 0.3s ease',
+              '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 12px 30px rgba(240, 147, 251, 0.3)' }
+            }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box sx={{ 
+                    bgcolor: 'rgba(255, 255, 255, 0.2)', 
+                    borderRadius: '12px', 
+                    p: 1.5
+                  }}>
+                    <HourglassEmptyIcon sx={{ fontSize: 40 }} />
                   </Box>
-                  <Badge badgeContent={stats.pending} color="error">
-                    <InfoOutlinedIcon sx={{ fontSize: 48, opacity: 0.8 }} />
-                  </Badge>
                 </Box>
+                <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
+                  {stats.pending}
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Pending / Not Uploaded
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
-          
+
           <Grid item xs={12} sm={6} md={3}>
-            <Card elevation={2} sx={{ borderRadius: 3, bgcolor: '#8b5cf6', color: 'white' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                      {stats.admins}
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                      Admin Users
-                    </Typography>
+            <Card elevation={0} sx={{ 
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              color: 'white',
+              transition: 'all 0.3s ease',
+              '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 12px 30px rgba(250, 112, 154, 0.3)' }
+            }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box sx={{ 
+                    bgcolor: 'rgba(255, 255, 255, 0.2)', 
+                    borderRadius: '12px', 
+                    p: 1.5
+                  }}>
+                    <SupervisorAccountIcon sx={{ fontSize: 40 }} />
                   </Box>
-                  <AdminPanelSettingsIcon sx={{ fontSize: 48, opacity: 0.8 }} />
                 </Box>
+                <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
+                  {stats.admins + stats.superAdmins}
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Admins ({stats.admins}) + Super ({stats.superAdmins})
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
         </Grid>
 
-        {/* Search and Action Bar */}
-        <Paper elevation={3} sx={{ mb: 3, p: 3, borderRadius: 3 }}>
-            <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} md={5}>
-                    <TextField 
-                        fullWidth
-                        label="Search Employees"
-                        placeholder="Search by name, email, or ID..."
-                        variant="outlined"
-                        size="medium"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon color="action" />
-                                </InputAdornment>
-                            ),
-                        }}
-                        sx={{ 
-                          '& .MuiOutlinedInput-root': { 
-                            borderRadius: 2 
-                          } 
-                        }}
-                    />
-                </Grid>
-                <Grid item xs={12} md={7} sx={{ textAlign: { md: 'right' } }}>
-                    <Tooltip title="Add a new employee to the system">
-                      <Button 
-                          variant="contained" 
-                          color="primary" 
-                          size="large"
-                          startIcon={<PersonAddIcon />}
-                          onClick={() => { setEditingUser(null); setIsModalOpen(true); }}
-                          sx={{ 
-                            borderRadius: 2, 
-                            px: 3,
-                            fontWeight: 600,
-                            boxShadow: 3
-                          }}
-                      >
-                          Add New Employee
-                      </Button>
-                    </Tooltip>
-                    <Tooltip title="Export employee data to Excel">
-                      <Button 
-                          variant="outlined" 
-                          color="secondary" 
-                          size="large"
-                          startIcon={<FileDownloadIcon />}
-                          sx={{ ml: 2, borderRadius: 2, px: 3, fontWeight: 600 }}
-                      >
-                          Export Data
-                      </Button>
-                    </Tooltip>
-                </Grid>
+        {/* Search Bar */}
+        <Paper 
+          elevation={0}
+          sx={{ 
+            mb: 4, 
+            p: 3, 
+            borderRadius: '20px',
+            border: '2px solid #e5e7eb',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+          }}
+        >
+          <Grid container spacing={3} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <TextField 
+                fullWidth
+                label="Search Employees"
+                placeholder="Search by name, email, or ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{ 
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: '#8b5cf6', fontSize: 24 }} />
+                    </InputAdornment>
+                  ) 
+                }}
+                sx={{ 
+                  '& .MuiOutlinedInput-root': { 
+                    borderRadius: '14px',
+                    bgcolor: '#f9fafb',
+                    fontWeight: 600,
+                    '& fieldset': { borderColor: '#e5e7eb', borderWidth: '2px' },
+                    '&:hover fieldset': { borderColor: '#8b5cf6', borderWidth: '2px' },
+                    '&.Mui-focused fieldset': { borderColor: '#8b5cf6', borderWidth: '2px' }
+                  },
+                  '& .MuiInputLabel-root': { fontWeight: 600, color: '#6b7280' },
+                  '& .MuiInputLabel-root.Mui-focused': { color: '#8b5cf6' }
+                }}
+              />
             </Grid>
+            <Grid item xs={12} md={6} sx={{ textAlign: { md: 'right' } }}>
+              <Button 
+                variant="contained" 
+                startIcon={<PersonAddIcon />}
+                onClick={() => { setEditingUser(null); setIsModalOpen(true); }}
+                sx={{ 
+                  borderRadius: '14px', 
+                  px: 4, 
+                  py: 1.5,
+                  mr: 2,
+                  fontWeight: 700,
+                  background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                  boxShadow: '0 6px 20px rgba(139, 92, 246, 0.3)',
+                  textTransform: 'none',
+                  '&:hover': {
+                    boxShadow: '0 8px 30px rgba(139, 92, 246, 0.5)',
+                    transform: 'translateY(-2px)'
+                  }
+                }}
+              >
+                Add Employee
+              </Button>
+              <Button 
+                variant="outlined" 
+                startIcon={<FileDownloadIcon />}
+                onClick={handleExport}
+                sx={{ 
+                  borderRadius: '14px', 
+                  px: 4, 
+                  py: 1.5,
+                  fontWeight: 700,
+                  borderWidth: '2px',
+                  borderColor: '#8b5cf6',
+                  color: '#8b5cf6',
+                  textTransform: 'none',
+                  '&:hover': {
+                    borderWidth: '2px',
+                    bgcolor: 'rgba(139, 92, 246, 0.1)',
+                    transform: 'translateY(-2px)'
+                  }
+                }}
+              >
+                Export
+              </Button>
+            </Grid>
+          </Grid>
         </Paper>
 
-        {/* Results Info */}
-        {searchTerm && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Found {employeesToDisplay.length} employee(s) matching "{searchTerm}"
-          </Typography>
-        )}
-
-        {/* Employee Table */}
-        <TableContainer component={Paper} elevation={3} sx={{ borderRadius: 3, overflow: 'hidden' }}>
-          <Table sx={{ minWidth: 650 }} aria-label="employee management table">
+        {/* Table */}
+        <TableContainer 
+          component={Paper} 
+          elevation={0}
+          sx={{ 
+            borderRadius: '20px',
+            border: '2px solid #e5e7eb',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+          }}
+        >
+          <Table>
             <TableHead>
-              <TableRow sx={{ bgcolor: '#1e293b' }}>
-                {tableHeadings.map((head) => (
-                    <TableCell 
-                      key={head.label} 
-                      align={head.align} 
-                      sx={{ 
-                        fontWeight: 700, 
-                        color: 'white',
-                        fontSize: '0.95rem',
-                        py: 2
-                      }}
-                    >
-                        {head.label}
-                    </TableCell>
+              <TableRow sx={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}>
+                {['Employee ID', 'Name', 'Email', 'DOB', 'Phone', 'Role', 'Document Status', 'Actions'].map((head) => (
+                  <TableCell 
+                    key={head} 
+                    sx={{ 
+                      fontWeight: 700, 
+                      color: 'white', 
+                      fontSize: '0.9rem', 
+                      py: 2.5,
+                      letterSpacing: '0.5px'
+                    }}
+                  >
+                    {head}
+                  </TableCell>
                 ))}
               </TableRow>
             </TableHead>
             <TableBody>
-              {employeesToDisplay.length === 0 ? (
+              {filteredEmployees.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
-                    <Typography variant="h6" color="text.secondary">
+                  <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
+                    <PeopleIcon sx={{ fontSize: 64, mb: 2, color: '#8b5cf6' }} />
+                    <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 600 }}>
                       No employees found
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {searchTerm ? 'Try adjusting your search criteria' : 'Add your first employee to get started'}
                     </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                employeesToDisplay.map((employee) => (
+                filteredEmployees.map((emp) => (
                   <TableRow 
-                    key={employee._id || employee.employeeId || employee.id} 
+                    key={emp._id || emp.id} 
                     sx={{ 
-                      '&:last-child td, &:last-child th': { border: 0 },
-                      '&:hover': { bgcolor: '#f8fafc' },
-                      transition: 'background-color 0.2s'
+                      '&:hover': { bgcolor: 'rgba(139, 92, 246, 0.05)' }
                     }}
                   >
-                    <TableCell component="th" scope="row" sx={{ fontWeight: 600 }}>
-                      {employee.employeeId || employee.id}
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 500 }}>{employee.name}</TableCell>
-                    <TableCell sx={{ color: '#64748b' }}>{employee.email}</TableCell>
-                    <TableCell align="center">
+                    <TableCell sx={{ fontWeight: 700, color: '#8b5cf6' }}>{emp.employeeId || emp.id}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>{emp.name}</TableCell>
+                    <TableCell sx={{ color: '#64748b' }}>{emp.email}</TableCell>
+                    <TableCell>{emp.dob ? emp.dob.substring(0, 10) : 'N/A'}</TableCell>
+                    <TableCell>{emp.phone || 'N/A'}</TableCell>
+                    <TableCell>
                       <Chip 
-                          label={employee.role?.toUpperCase() || 'N/A'}
-                          size="small"
-                          sx={{ 
-                            fontWeight: 600,
-                            color: 'white',
-                            bgcolor: employee.role === 'superadmin' ? '#5b21b6' : 
-                                    employee.role === 'admin' ? '#9c27b0' : 
-                                    employee.role === 'hr' ? '#f59e0b' : '#3b82f6'
-                          }}
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Chip 
-                        label={employee.status || 'N/A'}
+                        label={emp.role?.toUpperCase() || 'N/A'}
                         size="small"
-                        icon={employee.status === 'Approved' ? <VerifiedUserIcon sx={{ fontSize: 16 }} /> : undefined}
                         sx={{ 
-                            fontWeight: 600,
-                            color: 'white',
-                            bgcolor: employee.status === 'Approved' ? '#10b981' : 
-                                      employee.status === 'Pending' ? '#f59e0b' : '#ef4444'
+                          fontWeight: 700, 
+                          color: 'white',
+                          background: emp.role === 'superadmin' ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
+                                   : emp.role === 'admin' ? 'linear-gradient(135deg, #c948b8ff 0%, #94135eff 100%)'
+                                   : emp.role === 'employee' ? 'linear-gradient(135deg, #197b2dff 0%, #226daeff 100%)'
+                                   : 'linear-gradient(135deg, #9755b1ff 0%, #241193ff 100%)' 
+                        }}
+                      />  
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={getDisplayStatus(emp.documents)}
+                        size="small"
+                        sx={{ 
+                          fontWeight: 700, 
+                          color: 'white',
+                          background: getDisplayStatus(emp.documents) === 'Final Verification Completed' ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' :
+                                    getDisplayStatus(emp.documents) === 'Not Uploaded' ? 'linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%)' :
+                                    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
                         }}
                       />
                     </TableCell>
-                    <TableCell align="right">
-                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                        <Tooltip title="Send OTP via email">
-                          <span>
-                            <IconButton 
-                                size="small" 
-                                color="info"
-                                onClick={() => handleSendOTP(employee.email, employee.name)}
-                                disabled={!employee.email}
-                                sx={{ 
-                                  border: '1px solid',
-                                  borderColor: 'info.main',
-                                  '&:hover': { bgcolor: 'info.light' }
-                                }}
-                            >
-                                <EmailSendIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        
-                        <Tooltip title="Edit employee details">
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Tooltip title="Send OTP">
                           <IconButton 
-                              size="small" 
-                              color="primary"
-                              onClick={() => { setEditingUser(employee); setIsModalOpen(true); }}
-                              sx={{ 
-                                border: '1px solid',
-                                borderColor: 'primary.main',
-                                '&:hover': { bgcolor: 'primary.light' }
-                              }}
+                            size="small" 
+                            onClick={() => handleSendOTP(emp.email, emp.name)} 
+                            sx={{ 
+                              border: '2px solid #4facfe',
+                              color: '#4facfe',
+                              borderRadius: '8px',
+                              '&:hover': { bgcolor: 'rgba(79, 172, 254, 0.1)' }
+                            }}
                           >
-                              <EditIcon fontSize="small" />
+                            <EmailSendIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        
-                        <Tooltip title={!hasSuperAdminRights && employee.role !== 'employee' ? 'Insufficient permissions' : 'Delete employee'}>
-                          <span>
-                            <IconButton 
-                                size="small" 
-                                color="error"
-                                onClick={() => handleDeleteUser(employee._id || employee.id, employee.name, employee.role)}
-                                disabled={!hasSuperAdminRights && employee.role !== 'employee'}
-                                sx={{ 
-                                  border: '1px solid',
-                                  borderColor: 'error.main',
-                                  '&:hover': { bgcolor: 'error.light' }
-                                }}
-                            >
-                                <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        
-                        <Tooltip title="Verify employee documents">
-                          <Button 
-                              size="small" 
-                              variant="contained" 
-                              color="secondary"
-                              onClick={() => navigate(`/admin/verify/${employee.employeeId}`)}
-                              sx={{ borderRadius: 2, fontWeight: 600 }}
+                        <Tooltip title="Edit">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => { setEditingUser(emp); setIsModalOpen(true); }} 
+                            sx={{ 
+                              border: '2px solid #8b5cf6',
+                              color: '#8b5cf6',
+                              borderRadius: '8px',
+                              '&:hover': { bgcolor: 'rgba(139, 92, 246, 0.1)' }
+                            }}
                           >
-                              Verify
-                          </Button>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
                         </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDeleteUser(emp._id || emp.id, emp.name, emp.role)} 
+                            disabled={!hasSuperAdminRights && emp.role !== 'employee'} 
+                            sx={{ 
+                              border: '2px solid #f5576c',
+                              color: '#f5576c',
+                              borderRadius: '8px',
+                              '&:hover': { bgcolor: 'rgba(245, 87, 108, 0.1)' },
+                              '&:disabled': { opacity: 0.3 }
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Button 
+                          size="small" 
+                          variant="contained" 
+                          onClick={() => navigate(`/admin/verify/${emp.employeeId}`)} 
+                          sx={{ 
+                            borderRadius: '8px', 
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                            boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
+                            px: 2
+                          }}
+                        >
+                          Verify
+                        </Button>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -503,23 +599,13 @@ const AdminPage = () => {
             </TableBody>
           </Table>
         </TableContainer>
-
-        {/* Footer Info */}
-        <Box sx={{ mt: 4, p: 3, bgcolor: 'white', borderRadius: 3, boxShadow: 1 }}>
-          <Divider sx={{ mb: 2 }} />
-          <Typography variant="body2" color="text.secondary" align="center">
-            <strong>System Information:</strong> This panel allows authorized administrators to manage employee records, 
-            verify documentation, and control access permissions. All actions are logged for security purposes.
-          </Typography>
-        </Box>
       </Container>
-      
-      {/* User Form Modal */}
+
       <UserFormModal 
-          open={isModalOpen} 
-          onClose={() => setIsModalOpen(false)} 
-          user={editingUser} 
-          onSaveSuccess={fetchEmployees}
+        open={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        user={editingUser} 
+        onSaveSuccess={fetchEmployees} 
       />
     </Box>
   );

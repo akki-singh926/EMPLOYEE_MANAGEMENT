@@ -172,3 +172,36 @@ router.patch('/documents/:employeeId/:docId', protect, authorizeRoles('hr', 'adm
 });
 
 module.exports = router;
+// ----------------------
+// UPDATE employee info
+// ----------------------
+router.put('/employees/:id', protect, authorizeRoles('admin', 'superAdmin'), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ message: 'Employee not found' });
+
+    // Only update allowed fields
+    const { name, email, role, password, designation, department, reportingManager, phone, address, dob, emergencyContact } = req.body;
+
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (role) user.role = role;
+    if (password) user.password = password; // ensure you hash in User model pre-save
+    if (designation) user.designation = designation;
+    if (department) user.department = department;
+    if (reportingManager) user.reportingManager = reportingManager;
+    if (phone) user.phone = phone;
+    if (address) user.address = address;
+    if (dob) user.dob = dob;
+    if (emergencyContact) user.emergencyContact = emergencyContact;
+
+    await user.save();
+
+    res.json({ success: true, message: 'Employee updated successfully', user });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error while updating employee' });
+  }
+});

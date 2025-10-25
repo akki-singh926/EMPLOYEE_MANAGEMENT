@@ -13,7 +13,7 @@ const authRoutes = require('./routes/auth');
 
 const app = express();
 
-// connect db
+
 
 
 // middlewares

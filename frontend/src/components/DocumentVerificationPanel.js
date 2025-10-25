@@ -3,26 +3,23 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Typography, Button, Grid, Card, CardContent, CircularProgress,
   ListItem, ListItemText, Select, MenuItem, InputLabel, 
-  FormControl, TextField, Divider, Container, List, useTheme, IconButton, Tooltip
+  FormControl, TextField, Divider, Container, List, useTheme
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
 import CancelIcon from '@mui/icons-material/Cancel';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
-import { useNotification } from '../context/NotificationContext'; // <-- Correct filenameimport { useParams } from 'react-router-dom';
+import { useNotification } from '../context/NotificationContext';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 
-// --- Base URL Constants (Hardcoded for stability since we cannot use .env in component) ---
 const BACKEND_HOST = 'http://localhost:8080';
 const DOCS_ROUTE = '/api/hr/documents';
 const UPLOADS_PATH = '/uploads';
-const API_BASE_URL = 'http://localhost:8080/api/hr'; 
-// ----------------------------------------
+
 const DocumentVerificationPanel = () => {
     const { employeeId } = useParams(); 
     const theme = useTheme();
-
     const { showNotification } = useNotification();
     
     const [employee, setEmployee] = useState(null); 
@@ -30,10 +27,11 @@ const DocumentVerificationPanel = () => {
     const [verificationStatus, setVerificationStatus] = useState({});
     const [remark, setRemark] = useState('');
     const [currentDocUrl, setCurrentDocUrl] = useState(''); 
+    const [currentDocId, setCurrentDocId] = useState(null);
     const [currentDocName, setCurrentDocName] = useState('Select a Document');
     const [isLoading, setIsLoading] = useState(true);
     
-    // --- 1. FETCH DOCUMENTS LOGIC ---
+    // --- Fetch documents
     const fetchDocuments = async (id) => {
         setIsLoading(true);
         const token = localStorage.getItem('authToken');
@@ -44,21 +42,19 @@ const DocumentVerificationPanel = () => {
         }
 
         try {
-            // Fetch documents using the API proxy
             const response = await axios.get(`${DOCS_ROUTE}/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             
             const fetchedDocs = response.data.documents || [];
-            
             setEmployee(response.data.user || response.data); 
             setDocuments(fetchedDocs);
 
             if (fetchedDocs.length > 0) {
                 const firstDoc = fetchedDocs[0];
+                setCurrentDocId(firstDoc._id);
                 setCurrentDocName(firstDoc.name);
-                // FIX: Use the ABSOLUTE path for the iframe source
-                setCurrentDocUrl(`${BACKEND_HOST}${UPLOADS_PATH}/${firstDoc.filename}`); 
+                setCurrentDocUrl(`${BACKEND_HOST}${UPLOADS_PATH}/${encodeURIComponent(firstDoc.filename)}`);
                 setRemark(firstDoc.remarks || '');
             } else {
                 setCurrentDocName('No Documents Uploaded');
@@ -72,104 +68,86 @@ const DocumentVerificationPanel = () => {
         }
     };
 
-
-    // --- 2. useEffect Call (Triggers fetch only when ID is stable) ---
     useEffect(() => {
-        if (employeeId) {
-            fetchDocuments(employeeId); 
-        }
+        if (employeeId) fetchDocuments(employeeId); 
     }, [employeeId]); 
 
-
-    // --- Helper Functions ---
+    // --- Helpers
     const getIcon = (status) => {
         if (status === 'Approved') return <CheckCircleIcon color="success" />;
         if (status === 'Pending') return <PendingIcon color="warning" />;
         return <CancelIcon color="error" />;
     };
 
-    const handleStatusChange = (docName, status) => {
+    const handleStatusChange = (docId, status) => {
         setVerificationStatus(prev => ({
             ...prev,
-            [docName]: status,
+            [docId]: status,
         }));
     };
 
     const handleDocumentSelect = (doc) => {
-        const fullDoc = documents.find(d => d.name === doc.name);
-
-        if (fullDoc && fullDoc.filename) {
-            // FIX: Use the ABSOLUTE path for the iframe source
-            setCurrentDocUrl(`${BACKEND_HOST}${UPLOADS_PATH}/${fullDoc.filename}`);
-        } else {
-            setCurrentDocUrl(''); 
-            showNotification("No file uploaded for this document yet.", 'warning');
-        }
-        
+        setCurrentDocId(doc._id);
         setCurrentDocName(doc.name);
-        setRemark(fullDoc?.remarks || '');
-        
-        const currentStatus = verificationStatus[doc.name] || doc.status;
-        setVerificationStatus(prev => ({ ...prev, [doc.name]: currentStatus }));
+        setCurrentDocUrl(`${BACKEND_HOST}${UPLOADS_PATH}/${encodeURIComponent(doc.filename)}`);
+        setRemark(doc.remarks || '');
+
+        const currentStatus = verificationStatus[doc._id] || doc.status;
+        setVerificationStatus(prev => ({ ...prev, [doc._id]: currentStatus }));
     };
 
     const handleFinalSubmit = async () => {
-        const docToUpdate = documents.find(d => d.name === currentDocName);
-        if (!docToUpdate || !docToUpdate._id) return showNotification("Please select a valid uploaded document.", 'warning');
+        const docToUpdate = documents.find(d => d._id === currentDocId);
+        if (!docToUpdate) return showNotification("Please select a valid uploaded document.", 'warning');
         
-        const finalStatus = verificationStatus[currentDocName] || docToUpdate.status;
+        const finalStatus = verificationStatus[currentDocId] || docToUpdate.status;
 
         try {
-            // Endpoint: PATCH /api/hr/documents/:employeeId/:docId
-            await axios.patch(`${DOCS_ROUTE}/${employeeId}/${docToUpdate._id}`, // Use the relative path for API calls
+            await axios.patch(`${DOCS_ROUTE}/${employeeId}/${docToUpdate._id}`,
                 { status: finalStatus, remarks: remark },
                 { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } }
             );
 
-            showNotification(`Document ${currentDocName} status updated to ${finalStatus}.`, 'success');
-            fetchDocuments(employeeId); // Refresh list to show new status
+            showNotification(`Document ${docToUpdate.name} status updated to ${finalStatus}.`, 'success');
+            fetchDocuments(employeeId);
             
         } catch (error) {
             showNotification("Failed to save verification status.", 'error');
         }
     };
     
-    if (!employeeId) {
-        return <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Box>;
+    if (!employeeId || isLoading) {
+        return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            <CircularProgress />
+        </Box>;
     }
-    
-    if (isLoading) {
-        return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
-    }
-
 
     return (
         <Container component="main" sx={{ mt: 4, mb: 4 }} maxWidth="lg">
-            <Typography variant="h4" gutterBottom>Document Verification: {employee?.name || employeeId || 'Employee'}</Typography>
+            <Typography variant="h4" gutterBottom>Document Verification: {employee?.name || employeeId}</Typography>
             <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
-                Review and approve/reject documents for **{employeeId || 'Loading...'}**. 
+                Review and approve/reject documents for <strong>{employeeId}</strong>.
             </Typography>
 
             <Grid container spacing={3}>
-                {/* --- LEFT COLUMN: DOCUMENT LIST & ACTIONS --- */}
+                {/* LEFT: Document List */}
                 <Grid item xs={12} md={4}>
                     <Card sx={{ height: '100%' }}>
-                        <CardContent> 
+                        <CardContent>
                             <Typography variant="h6" gutterBottom>Document List</Typography>
-                            
                             {documents.length === 0 ? (
-                                <Typography color={theme.palette.error.main}>This employee has no documents uploaded.</Typography>
+                                <Typography color={theme.palette.error.main}>No documents uploaded.</Typography>
                             ) : (
                                 <>
                                     <List dense>
                                         {documents.map((doc) => (
                                             <ListItem 
-                                                key={doc.name} 
-                                                secondaryAction={getIcon(verificationStatus[doc.name] || doc.status)}
+                                                key={doc._id}
+                                                secondaryAction={getIcon(verificationStatus[doc._id] || doc.status)}
                                                 onClick={() => handleDocumentSelect(doc)}
                                                 sx={{ 
                                                     cursor: 'pointer', 
-                                                    backgroundColor: currentDocName === doc.name ? theme.palette.action.selected : 'transparent',
+                                                    backgroundColor: currentDocId === doc._id ? theme.palette.action.selected : 'transparent',
                                                     borderRadius: 1
                                                 }}
                                             >
@@ -184,14 +162,13 @@ const DocumentVerificationPanel = () => {
                                     <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
                                         Verification Action ({currentDocName})
                                     </Typography>
-                                    
+
                                     <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                                        <InputLabel id="status-select-label">Set Status</InputLabel>
+                                        <InputLabel>Status</InputLabel>
                                         <Select
-                                            labelId="status-select-label"
-                                            value={verificationStatus[currentDocName] || documents.find(d => d.name === currentDocName)?.status || 'Pending'}
+                                            value={verificationStatus[currentDocId] || documents.find(d => d._id === currentDocId)?.status || 'Pending'}
                                             label="Set Status"
-                                            onChange={(e) => handleStatusChange(currentDocName, e.target.value)}
+                                            onChange={(e) => handleStatusChange(currentDocId, e.target.value)}
                                             disabled={!currentDocUrl}
                                         >
                                             <MenuItem value={'Pending'}>Pending</MenuItem>
@@ -205,7 +182,7 @@ const DocumentVerificationPanel = () => {
                                         multiline
                                         rows={3}
                                         label="Admin Remarks"
-                                        placeholder="Reason for rejection or approval notes..."
+                                        placeholder="Notes or reason for rejection"
                                         value={remark}
                                         onChange={(e) => setRemark(e.target.value)}
                                         sx={{ mb: 2 }}
@@ -227,14 +204,13 @@ const DocumentVerificationPanel = () => {
                     </Card>
                 </Grid>
 
-                {/* --- RIGHT COLUMN: DOCUMENT PREVIEW --- */}
+                {/* RIGHT: Document Preview */}
                 <Grid item xs={12} md={8}>
                     <Card sx={{ height: '100%' }}> 
                         <CardContent>
                             <Typography variant="h6" gutterBottom>Preview: {currentDocName}</Typography>
                             {currentDocUrl ? (
                                 <Box sx={{ height: 600, border: '1px solid #ccc', mt: 2 }}>
-                                    {/* The iframe will attempt to load the file from the backend server */}
                                     <iframe 
                                         src={currentDocUrl} 
                                         title={currentDocName}
@@ -243,7 +219,7 @@ const DocumentVerificationPanel = () => {
                                 </Box>
                             ) : (
                                 <Box sx={{ height: 600, border: '1px dashed #ccc', mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Typography color="textSecondary">Select a document from the list to preview.</Typography>
+                                    <Typography color="textSecondary">Select a document to preview.</Typography>
                                 </Box>
                             )}
                         </CardContent>

@@ -1,153 +1,215 @@
 // src/components/PersonalInformationForm.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Box, TextField, Button, Grid, Typography, CircularProgress } from '@mui/material';
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
+import { useAuth } from '../context/AuthContext'; 
 
-// --- Temporary Mock Data for Display ---
+// --- Temporary Mock Data (for fallback when backend fails) ---
 const MOCK_DATA = {
-    fullName: 'Test Employee Name',
-    dob: '1990-01-01',
-    phone: '9876543210',
-    address: '456 Test Street, Mock City',
-    emergencyContact: '0123456789',
+  name: 'Test Employee Name',
+  dob: '1990-01-01', // YYYY-MM-DD
+  phone: '9876543210',
+  address: '456 Test Street, Mock City',
+  emergencyContact: '0123456789', 
+  designation: 'N/A',
+  department: 'N/A',
+  reportingManager: 'N/A',
 };
 
-// Component receives the refresh function from the DashboardPage
 const PersonalInformationForm = ({ onUpdateSuccess }) => {
-    const { showNotification } = useNotification();
-    const [formData, setFormData] = useState(null); 
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showNotification } = useNotification();
+  const { user } = useAuth();
 
-    // --- 1. FETCH PROFILE DATA ON LOAD ---
-    useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                const token = localStorage.getItem('authToken');
-                if (!token) throw new Error("No auth token found.");
+  const [formData, setFormData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastApprovedData, setLastApprovedData] = useState(null);
 
-                // Attempt to fetch from the real backend endpoint
-                const response = await axios.get('http://localhost:8080/api/employee/me', {
-                    headers: {
-                        Authorization: `Bearer ${token}` 
-                    }
-                });
-                
-                // --- If successful, use real data ---
-                // Mapping the response data fields to the form state
-                setFormData({
-                    fullName: response.data.name || '',
-                    dob: response.data.dob || '', // Use 'dob'
-    phone: response.data.phone || '',
-    address: response.data.address || '',
-    emergencyContact: response.data.emergencyContact || '',
-                });
-            } catch (error) {
-                // --- On API error (like 404), use mock data ---
-                console.error('Error fetching profile (using mock data):', error.message);
-                setFormData(MOCK_DATA);
-                showNotification('Profile API not ready. Displaying test data.', 'warning');
+  // --- Helper: Normalize phone number to E.164 format ---
+  const normalizePhone = (num) => {
+    if (!num) return '';
+    const trimmed = num.trim();
+    // If already starts with +, keep it
+    if (trimmed.startsWith('+')) return trimmed;
+    // Otherwise, add +91 (default for India)
+    return `+91${trimmed}`;
+  };
 
-            } finally {
-                setIsLoading(false);
-            }
-        };
+  // --- 1. FETCH PROFILE DATA ON LOAD ---
+  const fetchProfile = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("No auth token found.");
 
-        fetchProfile();
-    }, [showNotification]);
+      const response = await axios.get('http://localhost:8080/api/employee/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
+      const userData = response.data.data || response.data;
 
-    const handleChange = (event) => {
-        const { name, value } = event.target;
-        setFormData(prevState => ({
-            ...prevState,
-            [name]: value,
-        }));
-    };
+      const fetchedState = {
+        name: userData.name || '',
+        dob: userData.dob ? userData.dob.substring(0, 10) : '', // format: YYYY-MM-DD
+        phone: userData.phone || '',
+        address: userData.address || '',
+        emergencyContact: userData.emergencyContact || '',
+        designation: userData.designation || '',
+        department: userData.department || '',
+        reportingManager: userData.reportingManager || '',
+      };
 
-    // --- 2. SUBMIT PROFILE UPDATE ---
-    const handleSubmit = async (event) => {
-        event.preventDefault();
-        setIsSubmitting(true);
+      setFormData(fetchedState);
+      setLastApprovedData(fetchedState);
 
-        try {
-            const token = localStorage.getItem('authToken');
-            if (!token) throw new Error("No auth token found.");
-            
-            // Send the updated data to the backend (PUT /api/employee/me)
-            const response = await axios.put('http://localhost:8080/api/employee/me', formData, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-
-            // --- CRITICAL FIX: INSTANT UI UPDATE ---
-            // Update the local state with the data returned from the server
-            // This ensures the Job Details card refreshes with the new information.
-            setFormData({
-                fullName: response.data.name || formData.fullName,
-                dateOfBirth: response.data.dateOfBirth || formData.dateOfBirth,
-                phone: response.data.phone || formData.phone,
-                address: response.data.address || formData.address,
-                emergencyContactName: response.data.emergencyContactName || formData.emergencyContactName,
-                emergencyContactPhone: response.data.emergencyContactPhone || formData.emergencyContactPhone,
-            });
-
-            console.log('Update successful:', response.data);
-            showNotification('Information updated successfully!', 'success');
-            
-            // Trigger the parent component (Dashboard) to force Job Details refresh
-            if (onUpdateSuccess) {
-                onUpdateSuccess();
-            }
-
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            // This path runs until the backend implements the PUT route.
-            showNotification('Failed to update information. Try again.', 'error');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // --- Display Loading Spinner if data is not ready ---
-    if (isLoading || !formData) {
-        return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
-                <CircularProgress />
-            </Box>
-        );
+    } catch (error) {
+      console.error('Error fetching profile (using mock data):', error.message);
+      setFormData(MOCK_DATA);
+      setLastApprovedData(MOCK_DATA);
+      showNotification('Profile API data is currently mocked.', 'warning');
+    } finally {
+      setIsLoading(false);
     }
+  }, [showNotification]);
 
-    // --- The Form UI (displays once data is loaded) ---
+  useEffect(() => {
+    if (user) fetchProfile();
+  }, [user, fetchProfile]);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // --- 2. SUBMIT PROFILE UPDATE ---
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("No auth token found.");
+
+      // --- Payload creation ---
+      const payload = {
+        name: formData.name?.trim() || '',
+        dob: formData.dob ? formData.dob : '', // backend expects ISO8601 format
+        phone: normalizePhone(formData.phone), // convert to +91 format if needed
+        address: formData.address?.trim() || '',
+        emergencyContact: formData.emergencyContact?.trim() || '',
+        designation: formData.designation?.trim() || 'N/A',
+        department: formData.department?.trim() || 'N/A',
+        reportingManager: formData.reportingManager?.trim() || 'N/A',
+      };
+
+      console.log("Payload being sent:", payload); // Debugging helper
+
+      await axios.put('http://localhost:8080/api/employee/me', payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      showNotification('Information submitted for HR review!', 'warning');
+      setFormData(lastApprovedData); // revert to last approved after submission
+
+      if (onUpdateSuccess) onUpdateSuccess();
+
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      const errorMsg = error.response?.data?.errors?.[0]?.msg || error.response?.data?.message;
+      showNotification(`Failed to submit: ${errorMsg || 'Check required fields.'}`, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- 3. LOADING SPINNER ---
+  if (isLoading || !formData) {
     return (
-        <Box component="form" onSubmit={handleSubmit}>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Please keep your information up to date.
-            </Typography>
-            <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                    <TextField name="fullName" label="Full Name" value={formData.fullName} onChange={handleChange} fullWidth required />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                    <TextField name="dob" label="Date of Birth" type="date" value={formData.dob} onChange={handleChange} fullWidth required InputLabelProps={{ shrink: true }} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                    <TextField name="phone" label="Phone Number" value={formData.phone} onChange={handleChange} fullWidth required />
-                </Grid>
-                <Grid item xs={12}>
-                    <TextField name="address" label="Address" value={formData.address} onChange={handleChange} fullWidth required />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                    <TextField name="emergencyContact" label="Emergency Contact" value={formData.emergencyContact} onChange={handleChange} fullWidth required />
-                </Grid>
-            </Grid>
-            <Button type="submit" variant="contained" sx={{ mt: 3 }} disabled={isSubmitting}>
-                {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Update Information'}
-            </Button>
-        </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+        <CircularProgress />
+      </Box>
     );
+  }
+
+  // --- 4. FORM UI ---
+  return (
+    <Box component="form" onSubmit={handleSubmit}>
+      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+        Please keep your information up to date.
+      </Typography>
+
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            name="name"
+            label="Full Name"
+            value={formData.name}
+            onChange={handleChange}
+            fullWidth
+            required
+          />
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <TextField
+            name="dob"
+            label="Date of Birth"
+            type="date"
+            value={formData.dob}
+            onChange={handleChange}
+            fullWidth
+            required
+            InputLabelProps={{ shrink: true }}
+          />
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <TextField
+            name="phone"
+            label="Phone Number (with country code)"
+            value={formData.phone}
+            onChange={handleChange}
+            fullWidth
+            required
+          />
+        </Grid>
+
+        <Grid item xs={12}>
+          <TextField
+            name="address"
+            label="Address"
+            value={formData.address}
+            onChange={handleChange}
+            fullWidth
+            required
+          />
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <TextField
+            name="emergencyContact"
+            label="Emergency Contact"
+            value={formData.emergencyContact}
+            onChange={handleChange}
+            fullWidth
+            required
+          />
+        </Grid>
+      </Grid>
+
+      <Button
+        type="submit"
+        variant="contained"
+        sx={{ mt: 3 }}
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Update Information'}
+      </Button>
+    </Box>
+  );
 };
 
 export default PersonalInformationForm;
