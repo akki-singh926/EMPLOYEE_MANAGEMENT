@@ -4,6 +4,8 @@ const { protect, authorizeRoles } = require('../middlewares/auth');
 const User = require('../models/User');
 const crypto = require('crypto');
 const sendEmail = require('../utils/email');
+const logAction = require('../utils/logAction');
+
 
 
 // GET all employees (FIXED TO INCLUDE DOCUMENTS)
@@ -145,7 +147,7 @@ router.get('/documents/:employeeId', protect, authorizeRoles('hr', 'admin'), asy
 // ----------------------
 // UPDATE document status (Approve / Reject)
 // ----------------------
-router.patch('/documents/:employeeId/:docId', protect, authorizeRoles('hr', 'admin'), async (req, res) => {
+router.patch('/documents/:employeeId/:docId', protect, authorizeRoles('hr', 'admin',), async (req, res) => {
   const { employeeId, docId } = req.params;
   const { status, remarks } = req.body; // status = 'Approved' or 'Rejected'
 
@@ -163,6 +165,21 @@ router.patch('/documents/:employeeId/:docId', protect, authorizeRoles('hr', 'adm
     doc.status = status;
     doc.remarks = remarks || '';
     await user.save();
+    // after await user.save();
+await logAction({
+  req,
+  actor: req.user,
+  action: `DOCUMENT_${status.toUpperCase()}`, // e.g. DOCUMENT_APPROVED or DOCUMENT_REJECTED
+  targetType: 'Document',
+  targetId: doc._id,
+  details: {
+    employeeId: user.employeeId,
+    employeeEmail: user.email,
+    docName: doc.name,
+    remarks
+  }
+});
+
 
     res.json({ success: true, message: `Document ${status.toLowerCase()}`, document: doc });
   } catch (err) {

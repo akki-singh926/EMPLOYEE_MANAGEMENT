@@ -5,6 +5,8 @@ const User = require('../models/User');
 const sendEmail = require('../utils/email');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
+const logAction = require('../utils/logAction');
+
 // =====================================================
 // 1️⃣  Get all employees (Admin view)
 // =====================================================
@@ -33,6 +35,18 @@ router.post('/employees', protect, authorizeRoles('superAdmin'), async (req, res
     if (exists) return res.status(400).json({ message: 'Employee already exists' });
 
     const user = await User.create({ employeeId, email, password, name, role: role || 'employee' });
+     await logAction({
+      req,
+      actor: req.user, // The currently logged-in superAdmin
+      action: 'USER_CREATED',
+      targetType: 'User',
+      targetId: user._id,
+      details: {
+        employeeId: user.employeeId,
+        email: user.email,
+        role: user.role
+      }
+    });
 
     res.status(201).json({ success: true, message: 'Employee added successfully', user });
   } catch (err) {
@@ -48,9 +62,22 @@ router.put('/employees/:id', protect, authorizeRoles('superAdmin'), async (req, 
   try {
     const { id } = req.params;
     const updates = req.body;
+    const beforeUser = await User.findById(id).select('-password');
+    if (!beforeUser) return res.status(404).json({ message: 'Employee not found' });
 
     const user = await User.findByIdAndUpdate(id, updates, { new: true }).select('-password');
     if (!user) return res.status(404).json({ message: 'Employee not found' });
+     await logAction({
+      req,
+      actor: req.user, // the superAdmin performing the update
+      action: 'USER_UPDATED',
+      targetType: 'User',
+      targetId: user._id,
+      details: {
+        before: beforeUser.toObject(),
+        after: user.toObject()
+      }
+    });
 
     res.json({ success: true, message: 'Employee updated successfully', user });
   } catch (err) {
@@ -68,6 +95,15 @@ router.delete('/employees/:id', protect, authorizeRoles('superAdmin'), async (re
 
     const user = await User.findByIdAndDelete(id);
     if (!user) return res.status(404).json({ message: 'Employee not found' });
+    await logAction({
+  req,
+  actor: req.user,
+  action: 'USER_DELETED',
+  targetType: 'User',
+  targetId: user._id,
+  details: { employeeId: user.employeeId, email: user.email }
+});
+
 
     res.json({ success: true, message: 'Employee deleted successfully' });
   } catch (err) {
@@ -128,6 +164,21 @@ router.patch('/documents/:employeeId/:docId/verify', protect, authorizeRoles('su
     doc.status = finalStatus;
     doc.remarks = remarks || '';
     await user.save();
+    // after await user.save();
+await logAction({
+  req,
+  actor: req.user,
+  action: `DOCUMENT_${finalStatus.toUpperCase()}`, // DOCUMENT_VERIFIED or DOCUMENT_REJECTED
+  targetType: 'Document',
+  targetId: doc._id,
+  details: {
+    employeeId: user.employeeId,
+    employeeEmail: user.email,
+    docName: doc.name,
+    remarks
+  }
+});
+
 
     res.json({ success: true, message: `Document ${finalStatus.toLowerCase()}`, document: doc });
   } catch (err) {
@@ -264,6 +315,27 @@ router.post('/notify/all', protect, authorizeRoles('superAdmin', 'admin', 'hr'),
     res.status(500).json({ message: 'Server error' });
   }
 });
+// list audit logs (paginated)
+router.get('/audit', protect, authorizeRoles('superAdmin', 'admin'), async (req, res) => {
+  try {
+    const { page = 1, limit = 50, action, actorEmail } = req.query;
+    const q = {};
+    if (action) q.action = action;
+    if (actorEmail) q.actorEmail = actorEmail;
+
+    const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
+    const [items, total] = await Promise.all([
+      require('../models/Audit').find(q).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+      require('../models/Audit').countDocuments(q)
+    ]);
+
+    res.json({ success: true, total, page: Number(page), limit: Number(limit), items });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 
 module.exports = router;
 
