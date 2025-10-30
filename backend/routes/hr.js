@@ -53,6 +53,127 @@ router.get('/employees', protect, authorizeRoles('hr', 'admin'), async (req, res
     }
 });
 
+// list users who have pendingUpdates.status === 'Pending'
+router.get('/pending-updates', protect, authorizeRoles('hr','admin','superAdmin'), async (req, res) => {
+  try {
+    const users = await User.find({ 'pendingUpdates.status': 'Pending' }).select('-password');
+    res.json({ success: true, count: users.length, items: users });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+router.patch('/pending-updates/:userId', protect, authorizeRoles('hr','admin','superAdmin'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { action, remarks } = req.body;
+    if (!['approve','reject'].includes(action)) return res.status(400).json({ message: 'Invalid action' });
+
+    const user = await User.findById(userId).select('+pendingUpdates +notifications');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user.pendingUpdates || user.pendingUpdates.status !== 'Pending') {
+      return res.status(400).json({ message: 'No pending update exists for user' });
+    }
+
+    if (action === 'approve') {
+      const before = {};
+      const after = {};
+      const changes = user.pendingUpdates.data || {};
+      Object.keys(changes).forEach(k => {
+        before[k] = user[k];
+        user[k] = changes[k];
+        after[k] = user[k];
+      });
+
+      user.pendingUpdates.status = 'Approved';
+      user.pendingUpdates.remarks = remarks || '';
+      user.pendingUpdates.approvedBy = req.user._id;
+      user.pendingUpdates.approvedAt = new Date();
+
+      user.notifications.push({
+        type: 'PROFILE_UPDATE',
+        title: 'Profile update approved',
+        message: `Your profile update request was approved. ${remarks || ''}`,
+        meta: { before, after }
+      });
+
+      await user.save();
+
+      await logAction({
+        req,
+        actor: req.user,
+        action: 'PROFILE_UPDATE_APPROVED',
+        targetType: 'User',
+        targetId: user._id,
+        details: { before, after, remarks }
+      });
+
+      // ✅ SendGrid Email for Approval
+      await sendEmail({
+        to: user.email,
+        subject: "✅ Profile Update Approved",
+        html: `
+          <p>Hello ${user.name},</p>
+          <p>Your profile update request has been <strong style="color:green;">approved</strong> by HR.</p>
+          <p><b>Remarks:</b> ${remarks || "No remarks provided"}</p>
+          <br/>
+          <p>Regards,<br>HR Team</p>
+        `
+      });
+
+      return res.json({ success: true, message: 'Update approved', user });
+
+    } else { 
+      user.pendingUpdates.status = 'Rejected';
+      user.pendingUpdates.remarks = remarks || '';
+      user.pendingUpdates.rejectedBy = req.user._id;
+      user.pendingUpdates.rejectedAt = new Date();
+
+      user.notifications.push({
+        type: 'PROFILE_UPDATE',
+        title: 'Profile update rejected',
+        message: `Your profile update request was rejected. ${remarks || ''}`,
+        meta: { requested: user.pendingUpdates.data }
+      });
+
+      await user.save();
+
+      await logAction({
+        req,
+        actor: req.user,
+        action: 'PROFILE_UPDATE_REJECTED',
+        targetType: 'User',
+        targetId: user._id,
+        details: { requested: user.pendingUpdates.data, remarks }
+      });
+
+      // ❌ SendGrid Email for Rejection
+      await sendEmail({
+        to: user.email,
+        subject: "❌ Profile Update Rejected",
+        html: `
+          <p>Hello ${user.name},</p>
+          <p>Your profile update request has been <strong style="color:red;">rejected</strong> by HR.</p>
+          <p><b>Reason:</b> ${remarks || "No reason provided"}</p>
+          <br/>
+          <p>Please correct the details and resubmit.</p>
+          <br/>
+          <p>Regards,<br>HR Team</p>
+        `
+      });
+
+      return res.json({ success: true, message: 'Update rejected', user });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+
+
+
 // ----------------------
 // SEND OTP to employee
 // ----------------------

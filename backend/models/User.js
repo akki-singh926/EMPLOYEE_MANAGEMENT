@@ -44,7 +44,36 @@ const UserSchema = new mongoose.Schema({
   resetPasswordToken: String,
   resetPasswordExpires: Date,
 
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  // inside UserSchema
+pendingUpdates: {
+  type: {
+    data: mongoose.Schema.Types.Mixed, // holds proposed changes (only changed fields recommended)
+    requestedAt: Date,
+    status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // usually same user
+    remarks: String
+  },
+  default: null
+},
+
+notifications: [
+  {
+    type: { type: String }, // e.g. 'DOCUMENT_STATUS', 'PROFILE_UPDATE', 'SYSTEM'
+    title: String,
+    message: String,
+    meta: mongoose.Schema.Types.Mixed, // optional extra data (doc id, route, etc.)
+    read: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now }
+  }
+],
+
+
+
 });
+
+// add this after your UserSchema declaration (before module.exports)
+ // helps document status queries
+
 
 module.exports = mongoose.model('User', UserSchema);

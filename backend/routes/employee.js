@@ -5,6 +5,7 @@ const User = require('../models/User');
 const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const path = require('path');
+const logAction = require('../utils/logAction');
 
 // ----------------------
 // GET employee profile
@@ -19,6 +20,81 @@ router.get('/me', protect, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+// submit profile update request
+router.post('/me/update-request', protect, async (req, res) => {
+  try {
+    const allowed = ['name','dob','phone','address','emergencyContact','designation','department','reportingManager'];
+    const changes = {};
+    Object.keys(req.body).forEach(k => {
+      if (allowed.includes(k)) changes[k] = req.body[k];
+    });
+    if (Object.keys(changes).length === 0) {
+      return res.status(400).json({ message: 'No valid fields provided for update' });
+    }
+
+    req.user.pendingUpdates = {
+      data: changes,
+      requestedAt: new Date(),
+      status: 'Pending',
+      requestedBy: req.user._id
+    };
+
+    await req.user.save();
+
+    // add notification for HR / admin? (optional) — we'll add audit log and notify user only
+    await logAction({
+      req,
+      actor: req.user,
+      action: 'PROFILE_UPDATE_REQUESTED',
+      targetType: 'User',
+      targetId: req.user._id,
+      details: { requestedFields: Object.keys(changes) }
+    });
+
+    // push notification to user themselves
+    req.user.notifications.push({
+      type: 'PROFILE_UPDATE',
+      title: 'Profile update requested',
+      message: 'Your profile update request has been submitted for approval.',
+      meta: { requestedFields: Object.keys(changes) }
+    });
+    await req.user.save();
+
+    res.json({ success: true, message: 'Update request submitted', pendingUpdates: req.user.pendingUpdates });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+router.get('/notifications', protect, async (req, res) => {
+  try {
+    // optional: support ?unread=true
+    const { unread } = req.query;
+    const notifs = req.user.notifications || [];
+    const items = unread === 'true' ? notifs.filter(n => !n.read) : notifs;
+    res.json({ success: true, notifications: items });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+router.patch('/notifications/:idx/read', protect, async (req, res) => {
+  try {
+    const idx = Number(req.params.idx);
+    if (!req.user.notifications || !req.user.notifications[idx]) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+    req.user.notifications[idx].read = true;
+    await req.user.save();
+    res.json({ success: true, message: 'Notification marked read' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+
 
 // ----------------------
 // UPDATE employee profile
