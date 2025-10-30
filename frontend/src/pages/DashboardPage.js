@@ -26,6 +26,12 @@ import DocumentManager from '../components/DocumentManager';
 import JobDetails from '../components/JobDetails';
 import axios from 'axios';
 
+// --- PEGORION BRANDING COLORS ---
+const PRIMARY_COLOR = '#5A45FF'; // A deep, professional blue-purple
+const SECONDARY_COLOR = '#8B5CF6'; // A lighter purple accent
+const TEXT_COLOR = '#1F2937';
+const LIGHT_BACKGROUND = '#F9FAFB';
+
 const DashboardPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -45,12 +51,13 @@ const DashboardPage = () => {
     fetchEmployeeData();
   };
 
+  // Updated function to use professional blue/purple gradients
   const getRoleColor = (role) => {
     switch (role) {
-      case 'superadmin': return 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
-      case 'admin': return 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)';
-      case 'hr': return 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)';
-      default: return 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+      case 'superadmin': return 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)'; // Deep Blue
+      case 'admin': return 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)';    // Purple
+      case 'hr': return 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)';       // Red/Alert (distinguish from tech roles)
+      default: return 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)';        // Standard Blue
     }
   };
 
@@ -91,11 +98,11 @@ const DashboardPage = () => {
           justifyContent: 'center', 
           alignItems: 'center',
           minHeight: '100vh',
-          background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
+          background: LIGHT_BACKGROUND,
         }}
       >
-        <CircularProgress size={60} thickness={4} sx={{ color: '#10b981' }} />
-        <Typography variant="h6" sx={{ mt: 3, color: '#059669', fontWeight: 600 }}>
+        <CircularProgress size={60} thickness={4} sx={{ color: PRIMARY_COLOR }} />
+        <Typography variant="h6" sx={{ mt: 3, color: TEXT_COLOR, fontWeight: 600 }}>
           Loading your dashboard...
         </Typography>
       </Box>
@@ -105,49 +112,39 @@ const DashboardPage = () => {
   return (
     <Box sx={{ 
       minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #dbeafe 100%)',
-      position: 'relative',
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '300px',
-        background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, transparent 100%)',
-        pointerEvents: 'none'
-      }
+      background: LIGHT_BACKGROUND, // Clean background
     }}>
       
-      {/* Navbar */}
+      {/* Navbar - Clean White with Border */}
       <AppBar 
         position="static" 
         elevation={0} 
         sx={{ 
-          background: 'linear-gradient(90deg, #ffffff 0%, #f9fafb 100%)',
-          borderBottom: '2px solid #e5e7eb',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+          background: 'white',
+          borderBottom: '1px solid #E5E7EB',
         }}
       >
         <Toolbar sx={{ py: 1.5, px: { xs: 2, sm: 4 } }}>
           <Box sx={{
             display: 'flex',
             alignItems: 'center',
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            borderRadius: '12px',
-            p: 1,
+            // Use Primary Color for logo background
+            background: PRIMARY_COLOR, 
+            borderRadius: '8px', 
+            p: 0.8,
             mr: 2,
-            boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
+            boxShadow: '0 4px 15px rgba(90, 69, 255, 0.3)'
           }}>
             <BusinessCenterIcon sx={{ color: 'white', fontSize: 28 }} />
           </Box>
 
-          <Typography variant="h6" sx={{ fontWeight: 700, color: '#111827' }}>
-            Employee Portal
+          <Typography variant="h6" sx={{ fontWeight: 700, color: TEXT_COLOR }}>
+            Pegorion Employee Portal
           </Typography>
 
           <Box sx={{ flexGrow: 1 }} />
 
+          {/* Admin Panel Button */}
           {(user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'hr') && (
             <Button 
               onClick={() => navigate('/admin')} 
@@ -157,15 +154,19 @@ const DashboardPage = () => {
                 textTransform: 'none', 
                 fontWeight: 600, 
                 color: 'white',
-                background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                background: PRIMARY_COLOR,
+                '&:hover': {
+                    background: SECONDARY_COLOR,
+                },
                 px: 3, py: 1,
-                borderRadius: '10px',
+                borderRadius: '8px',
               }}
             >
               Admin Panel
             </Button>
           )}
 
+          {/* Logout Button - Outlined/Subtle */}
           <Button 
             onClick={handleLogout} 
             startIcon={<LogoutIcon />} 
@@ -173,10 +174,10 @@ const DashboardPage = () => {
             sx={{ 
               textTransform: 'none', 
               fontWeight: 600, 
-              borderColor: '#d1d5db', 
-              color: '#374151',
+              borderColor: '#D1D5DB', 
+              color: TEXT_COLOR,
               px: 3, py: 1,
-              borderRadius: '10px',
+              borderRadius: '8px',
             }}
           >
             Logout
@@ -186,15 +187,14 @@ const DashboardPage = () => {
 
       <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
         
-        {/* Welcome Section */}
+        {/* Welcome Section - Clean Card Design */}
         <Paper
-          elevation={0}
+          elevation={4} // Use a standard elevation for a clean shadow
           sx={{
             p: 4,
-            borderRadius: '24px',
-            border: '2px solid #e5e7eb',
-            background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.08)'
+            borderRadius: '12px',
+            border: '1px solid #E5E7EB',
+            background: 'white',
           }}
         >
           <Grid container spacing={3} alignItems="center">
@@ -202,9 +202,8 @@ const DashboardPage = () => {
               <Avatar 
                 sx={{
                   width: 80, height: 80,
-                  background: getRoleColor(employeeData?.role),
+                  background: getRoleColor(employeeData?.role), // Role-based avatar color
                   fontSize: '2.3rem', fontWeight: 700,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
                 }}
               >
                 {employeeData?.name?.charAt(0)?.toUpperCase() || 'E'}
@@ -212,28 +211,28 @@ const DashboardPage = () => {
             </Grid>
             <Grid item xs>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <WavingHandIcon sx={{ color: '#f59e0b' }} />
-                <Typography variant="h4" sx={{ fontWeight: 800, color: '#111827' }}>
+                <WavingHandIcon sx={{ color: PRIMARY_COLOR }} />
+                <Typography variant="h4" sx={{ fontWeight: 700, color: TEXT_COLOR }}>
                   Welcome Back, {userName}!
                 </Typography>
               </Box>
 
-              <Grid container spacing={2}>
+              <Grid container spacing={3} sx={{ mt: 1 }}>
                 <Grid item xs={12} sm={4}>
-                  <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600 }}>Employee ID</Typography>
-                  <Typography variant="body2" sx={{ color: '#111827', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 600 }}>Employee ID</Typography>
+                  <Typography variant="body1" sx={{ color: TEXT_COLOR, fontWeight: 600 }}>
                     {employeeData?.employeeId || employeeData?.id || 'N/A'}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600 }}>Email</Typography>
-                  <Typography variant="body2" sx={{ color: '#111827', fontWeight: 600 }}>
-                    {employeeData?.email || 'email@company.com'}
+                  <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 600 }}>Email</Typography>
+                  <Typography variant="body1" sx={{ color: TEXT_COLOR, fontWeight: 600 }}>
+                    {employeeData?.email || 'email@pegorion.com'}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600 }}>Today</Typography>
-                  <Typography variant="body2" sx={{ color: '#111827', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 600 }}>Today</Typography>
+                  <Typography variant="body1" sx={{ color: TEXT_COLOR, fontWeight: 600 }}>
                     {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </Typography>
                 </Grid>
@@ -243,7 +242,13 @@ const DashboardPage = () => {
               {employeeData?.role && (
                 <Chip 
                   label={employeeData.role.toUpperCase()} 
-                  sx={{ background: getRoleColor(employeeData.role), color: 'white', fontWeight: 700 }}
+                  sx={{ 
+                    background: getRoleColor(employeeData.role), 
+                    color: 'white', 
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    px: 1,
+                  }}
                 />
               )}
             </Grid>
@@ -253,7 +258,8 @@ const DashboardPage = () => {
         {/* Personal Info + Job Details */}
         <Grid container spacing={4} sx={{ mt: 3 }}>
           <Grid item xs={12} md={6}>
-            <PersonalInformationForm onUpdateSuccess={triggerDataRefresh} />
+            {/* The components themselves will need to be styled to match the new look */}
+            <PersonalInformationForm onUpdateSuccess={triggerDataRefresh} /> 
           </Grid>
           <Grid item xs={12} md={6}>
             <JobDetails key={refreshTrigger} employee={employeeData} />
@@ -268,6 +274,7 @@ const DashboardPage = () => {
         {/* Footer */}
         <Box sx={{ mt: 5, textAlign: 'center' }}>
           <Typography variant="body2" sx={{ color: '#6b7280' }}>
+            © {new Date().getFullYear()} Pegorion Software Solutions Pvt. Ltd.
           </Typography>
         </Box>
       </Container>

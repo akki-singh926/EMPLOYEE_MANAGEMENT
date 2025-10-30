@@ -11,6 +11,12 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
 
+// --- PEGORION BRANDING COLORS ---
+const PRIMARY_COLOR = '#5A45FF'; // Pegorion Primary Blue-Purple
+const SECONDARY_COLOR = '#8B5CF6'; // Pegorion Lighter Purple Accent
+const TEXT_COLOR = '#1F2937';
+const LIGHT_BACKGROUND = '#F9FAFB';
+
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,7 +43,8 @@ const ForgotPasswordPage = () => {
       setTimeout(() => navigate('/login'), 3000);
 
     } catch (apiError) {
-      setError('Could not process request. Please try again later.');
+      // Keep the generic error message for security reasons
+      setError('Could not process request. Please try again later.'); 
     } finally {
       setIsLoading(false);
     }
@@ -49,55 +56,55 @@ const ForgotPasswordPage = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #f0fdf4 0%, #dbeafe 50%, #fce4ec 100%)',
+      // Clean, light background
+      background: LIGHT_BACKGROUND, 
       py: { xs: 3, sm: 4 },
       px: 2
     }}>
       <Container maxWidth="sm">
         {/* Header */}
         <Box sx={{ textAlign: 'center', mb: 4 }}>
+          {/* Icon Box: Primary color background, subtle styling */}
           <Box sx={{ 
             width: { xs: 70, sm: 80 }, 
             height: { xs: 70, sm: 80 }, 
-            background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
-            borderRadius: '20px',
+            background: PRIMARY_COLOR,
+            borderRadius: '50%', // Round icon
             display: 'flex',
             alignItems: 'center', 
             justifyContent: 'center',
             margin: '0 auto', 
             mb: 3,
-            boxShadow: '0 8px 30px rgba(245, 158, 11, 0.35)',
-            border: '4px solid white'
+            boxShadow: '0 8px 30px rgba(90, 69, 255, 0.35)', // Shadow with primary color
           }}>
             <LockResetIcon sx={{ fontSize: { xs: 40, sm: 48 }, color: 'white' }} />
           </Box>
-          <Typography variant="h3" fontWeight={900} sx={{ 
-            color: '#111827',
-            letterSpacing: '-0.5px',
-            fontSize: { xs: '1.8rem', sm: '2.5rem' },
+          <Typography variant="h3" fontWeight={700} sx={{ 
+            color: TEXT_COLOR,
+            fontSize: { xs: '2rem', sm: '2.5rem' },
             mb: 1
           }}>
-            Reset Password
+            Password Reset
           </Typography>
           <Typography variant="h6" sx={{ 
             color: '#6b7280', 
-            fontWeight: 600,
-            fontSize: { xs: '0.95rem', sm: '1.1rem' },
+            fontWeight: 400, // Slightly lighter font weight
+            fontSize: { xs: '1rem', sm: '1.1rem' },
             px: 2
           }}>
-            Enter your email to receive a reset link
+            Enter your email to receive a password reset link.
           </Typography>
         </Box>
 
-        {/* Reset Form Card */}
+        {/* Reset Form Card - Clean White Card */}
         <Paper 
-          elevation={0}
+          elevation={6} // Standard professional elevation
           sx={{ 
             p: { xs: 3, sm: 4, md: 5 },
-            border: '3px solid #e5e7eb',
+            border: '1px solid #E5E7EB', // Subtle border
             bgcolor: 'white',
-            borderRadius: '28px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.12)'
+            borderRadius: '12px', // Standard corporate rounding
+            boxShadow: '0 10px 30px rgba(0,0,0,0.05)'
           }}
         >
           <Box component="form" onSubmit={handleSubmit}>
@@ -116,30 +123,27 @@ const ForgotPasswordPage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <EmailOutlinedIcon sx={{ color: '#f59e0b', fontSize: 24 }} />
+                    <EmailOutlinedIcon sx={{ color: PRIMARY_COLOR, fontSize: 24 }} /> {/* Primary color icon */}
                   </InputAdornment>
                 ),
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  bgcolor: '#f9fafb',
-                  borderRadius: '14px',
-                  fontWeight: 600,
-                  '& fieldset': { borderColor: '#e5e7eb', borderWidth: '2px' },
-                  '&:hover fieldset': { borderColor: '#f59e0b', borderWidth: '2px' },
-                  '&.Mui-focused fieldset': { borderColor: '#f59e0b', borderWidth: '2px' },
+                  bgcolor: LIGHT_BACKGROUND,
+                  borderRadius: '8px', // Match card rounding
+                  '& fieldset': { borderColor: '#e5e7eb' },
+                  '&:hover fieldset': { borderColor: PRIMARY_COLOR },
+                  '&.Mui-focused fieldset': { borderColor: PRIMARY_COLOR, borderWidth: '2px' },
                 },
                 '& .MuiInputLabel-root': { fontWeight: 600, color: '#6b7280' },
-                '& .MuiInputLabel-root.Mui-focused': { color: '#f59e0b' }
+                '& .MuiInputLabel-root.Mui-focused': { color: PRIMARY_COLOR }
               }}
             />
             
             {error && (
               <Alert severity="error" sx={{ 
                 mt: 3,
-                border: '2px solid #fecaca',
-                bgcolor: '#fef2f2',
-                borderRadius: '14px',
+                borderRadius: '8px',
                 fontWeight: 600
               }}>
                 {error}
@@ -153,18 +157,17 @@ const ForgotPasswordPage = () => {
               sx={{ 
                 mt: 4, 
                 mb: 2,
-                background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
-                py: 1.8,
+                // Primary color button with subtle hover/shadow
+                background: PRIMARY_COLOR,
+                py: 1.5,
                 textTransform: 'none',
                 fontSize: { xs: '1rem', sm: '1.1rem' },
-                fontWeight: 800,
-                borderRadius: '14px',
-                boxShadow: '0 6px 20px rgba(245, 158, 11, 0.3)',
-                border: '2px solid rgba(255,255,255,0.2)',
+                fontWeight: 700,
+                borderRadius: '8px',
+                boxShadow: '0 4px 15px rgba(90, 69, 255, 0.3)',
                 '&:hover': {
-                  boxShadow: '0 8px 30px rgba(245, 158, 11, 0.5)',
-                  transform: 'translateY(-3px)',
-                  transition: 'all 0.3s ease'
+                  background: SECONDARY_COLOR,
+                  boxShadow: '0 6px 20px rgba(90, 69, 255, 0.4)',
                 },
                 '&:disabled': {
                   background: '#e5e7eb',
@@ -181,9 +184,9 @@ const ForgotPasswordPage = () => {
                 to="/login"
                 style={{
                   textDecoration: 'none',
-                  color: '#f59e0b',
+                  color: PRIMARY_COLOR, // Primary color link
                   fontSize: '0.95rem',
-                  fontWeight: 700,
+                  fontWeight: 600,
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px'
@@ -196,45 +199,45 @@ const ForgotPasswordPage = () => {
           </Box>
         </Paper>
 
-        {/* Security Note */}
+        {/* Security Note - Clean and Professional Alert Style */}
         <Box 
           sx={{ 
             mt: 4, 
             p: 3, 
-            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-            border: '3px solid #fbbf24',
-            borderRadius: '20px',
-            boxShadow: '0 8px 24px rgba(245, 158, 11, 0.15)'
+            background: '#E0F7FA', // Light blue/cyan background for a professional "info" feel
+            border: '2px solid #00BCD4', // Cyan border
+            borderRadius: '12px',
+            boxShadow: '0 4px 15px rgba(0, 188, 212, 0.1)'
           }}
         >
           <Typography variant="body2" sx={{ 
-            color: '#92400e', 
+            color: '#006064', // Darker text for readability
             fontWeight: 700,
             mb: 1,
             fontSize: { xs: '0.9rem', sm: '1rem' }
           }}>
-            🔒 Security Note
+            ℹ️ Information Security
           </Typography>
           <Typography variant="body2" sx={{ 
-            color: '#b45309',
-            fontWeight: 600,
+            color: '#00838F',
+            fontWeight: 500,
             fontSize: { xs: '0.85rem', sm: '0.9rem' }
           }}>
-            For security reasons, we'll send a reset link regardless of whether the email exists in our system.
+            For system security, a password reset link will be sent to the provided email **only if** a corresponding account is found in our system.
           </Typography>
         </Box>
 
         {/* Footer */}
         <Box sx={{ mt: 4, textAlign: 'center' }}>
-          <Typography variant="body1" sx={{ color: '#374151', fontWeight: 700 }}>
-            © 2025 Employee Management System
+          <Typography variant="body1" sx={{ color: TEXT_COLOR, fontWeight: 700 }}>
+            © {new Date().getFullYear()} Pegorion Software Solutions
           </Typography>
           <Typography variant="body2" sx={{ 
             mt: 1,
             color: '#6b7280',
-            fontWeight: 600
+            fontWeight: 400
           }}>
-            🔐 Secure Password Recovery
+            Secure Digital Identity Management
           </Typography>
         </Box>
       </Container>

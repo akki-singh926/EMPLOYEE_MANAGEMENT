@@ -6,7 +6,7 @@ import {
   FormControl, TextField, Divider, Container, List, useTheme
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import PendingIcon from '@mui/icons-material/Pending';
+import PendingIcon from '@mui/icons-material/Pending';  
 import CancelIcon from '@mui/icons-material/Cancel';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useNotification } from '../context/NotificationContext';
@@ -72,7 +72,6 @@ const DocumentVerificationPanel = () => {
         if (employeeId) fetchDocuments(employeeId); 
     }, [employeeId]); 
 
-    // --- Helpers
     const getIcon = (status) => {
         if (status === 'Approved') return <CheckCircleIcon color="success" />;
         if (status === 'Pending') return <PendingIcon color="warning" />;
@@ -109,6 +108,13 @@ const DocumentVerificationPanel = () => {
             );
 
             showNotification(`Document ${docToUpdate.name} status updated to ${finalStatus}.`, 'success');
+
+            // 🔔 Notification to employee
+            showNotification(
+              `Notification sent to ${employee?.name || employeeId}: Your document '${docToUpdate.name}' was ${finalStatus.toLowerCase()}.`,
+              'info'
+            );
+
             fetchDocuments(employeeId);
             
         } catch (error) {

@@ -15,6 +15,14 @@ import BusinessIcon from '@mui/icons-material/Business';
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext'; 
 
+// --- PEGORION BRANDING COLORS (FLAT, CRISP) ---
+const PRIMARY_COLOR = '#5A45FF';      // Pegorion Primary Blue-Purple
+const SECONDARY_COLOR = '#8B5CF6';    // Pegorion Lighter Purple Accent
+const TEXT_COLOR_DARK = '#1F2937';    
+const LIGHT_BACKGROUND = '#F9FAFB';   // Very light gray background
+const WHITE = '#FFFFFF';
+
+
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,7 +57,6 @@ const LoginPage = () => {
       localStorage.setItem('authToken', token);
       
       let finalUserData = userData;
-      // Get the role from the database
       let userRoleFromDB = userData.role || 'employee'; 
 
       // --- FINAL SECURITY/REDIRECTION LOGIC ---
@@ -110,10 +117,18 @@ const LoginPage = () => {
   };
   
   // Helper function to get the color for the main sign-in button
+  // Using flat colors for cleaner design
   const getButtonColor = () => {
-    if (loginType === 'admin') return 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)';
-    if (loginType === 'superAdmin') return 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
-    return 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+    if (loginType === 'admin') return '#F59E0B'; // Amber
+    if (loginType === 'superAdmin') return SECONDARY_COLOR;
+    return PRIMARY_COLOR; // Primary Pegorion Blue-Purple
+  };
+  
+  // Helper function to get the main accent color for icons/inputs
+  const getAccentColor = () => {
+    if (loginType === 'admin') return '#F59E0B'; 
+    if (loginType === 'superAdmin') return SECONDARY_COLOR;
+    return PRIMARY_COLOR;
   };
 
   return (
@@ -122,91 +137,66 @@ const LoginPage = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #f0fdf4 0%, #dbeafe 50%, #fce4ec 100%)',
-      position: 'relative',
+      background: LIGHT_BACKGROUND, // Clean light gray background
       py: { xs: 3, sm: 4 },
       px: 2,
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'radial-gradient(circle at top right, rgba(16, 185, 129, 0.1) 0%, transparent 50%), radial-gradient(circle at bottom left, rgba(139, 92, 246, 0.1) 0%, transparent 50%)',
-        pointerEvents: 'none'
-      }
     }}>
       <Container component="main" maxWidth="sm" sx={{ position: 'relative', zIndex: 1 }}>
         {/* Header */}
         <Box sx={{ textAlign: 'center', mb: 4 }}>
+          {/* Icon Box: Use primary color, standard circle, removed border/heavy shadow */}
           <Box sx={{ 
-            width: { xs: 70, sm: 80 }, 
-            height: { xs: 70, sm: 80 }, 
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            borderRadius: '20px',
+            width: { xs: 60, sm: 70 }, 
+            height: { xs: 60, sm: 70 }, 
+            background: PRIMARY_COLOR,
+            borderRadius: '50%',
             display: 'flex',
             alignItems: 'center', 
             justifyContent: 'center',
             margin: '0 auto', 
             mb: 3,
-            boxShadow: '0 8px 30px rgba(16, 185, 129, 0.35)',
-            border: '4px solid white'
+            boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
           }}>
-            <BusinessIcon sx={{ fontSize: { xs: 40, sm: 48 }, color: 'white' }} />
+            <BusinessIcon sx={{ fontSize: { xs: 36, sm: 42 }, color: WHITE }} />
           </Box>
-          <Typography variant="h3" fontWeight={900} sx={{ 
-            color: '#111827',
-            letterSpacing: '-0.5px',
-            fontSize: { xs: '1.8rem', sm: '2.5rem' },
+          <Typography variant="h3" fontWeight={700} sx={{ // Reduced font weight
+            color: TEXT_COLOR_DARK,
+            fontSize: { xs: '2rem', sm: '2.5rem' },
             mb: 1
           }}>
-            Employee Portal
+            Pegorion Employee Portal
           </Typography>
           <Typography variant="h6" sx={{ 
-            color: '#6b7280', 
-            fontWeight: 600,
-            fontSize: { xs: '0.95rem', sm: '1.1rem' }
+            color: '#6B7280', 
+            fontWeight: 400, // Reduced font weight
+            fontSize: { xs: '1rem', sm: '1.1rem' }
           }}>
             Welcome back! Please sign in to continue
           </Typography>
         </Box>
 
-        {/* Login Card */}
+        {/* Login Card - Clean White, Subtle Elevation */}
         <Paper 
-          elevation={0}
+          elevation={6}
           sx={{ 
             p: { xs: 3, sm: 4, md: 5 },
-            border: '3px solid #e5e7eb',
-            bgcolor: 'white',
-            borderRadius: '28px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
-            position: 'relative',
-            overflow: 'hidden',
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: -50,
-              right: -50,
-              width: '200px',
-              height: '200px',
-              background: 'radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, transparent 70%)',
-              borderRadius: '50%'
-            }
+            border: '1px solid #E5E7EB',
+            bgcolor: WHITE,
+            borderRadius: '12px', // Standard corporate rounding
+            boxShadow: '0 10px 30px rgba(0,0,0,0.1)', // Subtle shadow
           }}
         >
-          {/* Role Toggle Buttons */}
+          {/* Role Toggle Buttons - Flat/Crisp Design */}
           <Box sx={{ 
             display: 'flex', 
-            gap: 1.5,
+            gap: 1,
             mb: 4,
-            p: 1.5,
-            background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-            borderRadius: '16px',
-            border: '2px solid #e5e7eb',
-            position: 'relative',
-            zIndex: 1
+            p: 1,
+            background: LIGHT_BACKGROUND,
+            borderRadius: '8px',
+            border: '1px solid #E5E7EB',
           }}>
+            {/* Employee Button */}
             <Button
               variant={loginType === 'employee' ? 'contained' : 'text'}
               onClick={() => setLoginType('employee')}
@@ -214,22 +204,21 @@ const LoginPage = () => {
               disableElevation
               sx={{ 
                 textTransform: 'none', 
-                fontWeight: 700, 
-                py: 1.5,
-                borderRadius: '12px',
-                fontSize: { xs: '0.8rem', sm: '0.875rem' },
-                color: loginType === 'employee' ? 'white' : '#6b7280',
-                background: loginType === 'employee' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
-                boxShadow: loginType === 'employee' ? '0 4px 15px rgba(16, 185, 129, 0.3)' : 'none',
+                fontWeight: 600, 
+                py: 1.2,
+                borderRadius: '6px',
+                fontSize: { xs: '0.8rem', sm: '0.9rem' },
+                color: loginType === 'employee' ? WHITE : TEXT_COLOR_DARK,
+                background: loginType === 'employee' ? PRIMARY_COLOR : 'transparent',
+                boxShadow: 'none',
                 '&:hover': { 
-                  background: loginType === 'employee' ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : '#e5e7eb',
-                  transform: loginType === 'employee' ? 'translateY(-2px)' : 'none',
-                  transition: 'all 0.3s ease'
+                  background: loginType === 'employee' ? SECONDARY_COLOR : '#E5E7EB',
                 }
               }}
             >
               Employee
             </Button>
+            {/* Admin/HR Button */}
             <Button
               variant={loginType === 'admin' ? 'contained' : 'text'}
               onClick={() => setLoginType('admin')}
@@ -237,22 +226,21 @@ const LoginPage = () => {
               disableElevation
               sx={{ 
                 textTransform: 'none', 
-                fontWeight: 700, 
-                py: 1.5,
-                borderRadius: '12px',
-                fontSize: { xs: '0.8rem', sm: '0.875rem' },
-                color: loginType === 'admin' ? 'white' : '#6b7280',
-                background: loginType === 'admin' ? 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)' : 'transparent',
-                boxShadow: loginType === 'admin' ? '0 4px 15px rgba(245, 158, 11, 0.3)' : 'none',
+                fontWeight: 600, 
+                py: 1.2,
+                borderRadius: '6px',
+                fontSize: { xs: '0.8rem', sm: '0.9rem' },
+                color: loginType === 'admin' ? WHITE : TEXT_COLOR_DARK,
+                background: loginType === 'admin' ? getButtonColor() : 'transparent', // Amber flat color
+                boxShadow: 'none',
                 '&:hover': { 
-                  background: loginType === 'admin' ? 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' : '#e5e7eb',
-                  transform: loginType === 'admin' ? 'translateY(-2px)' : 'none',
-                  transition: 'all 0.3s ease'
+                  background: loginType === 'admin' ? '#D97706' : '#E5E7EB',
                 }
               }}
             >
               Admin/HR
             </Button>
+            {/* Super Admin Button */}
             <Button
               variant={loginType === 'superAdmin' ? 'contained' : 'text'}
               onClick={() => setLoginType('superAdmin')}
@@ -260,17 +248,15 @@ const LoginPage = () => {
               disableElevation
               sx={{ 
                 textTransform: 'none', 
-                fontWeight: 700, 
-                py: 1.5,
-                borderRadius: '12px',
-                fontSize: { xs: '0.8rem', sm: '0.875rem' },
-                color: loginType === 'superAdmin' ? 'white' : '#6b7280',
-                background: loginType === 'superAdmin' ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'transparent',
-                boxShadow: loginType === 'superAdmin' ? '0 4px 15px rgba(139, 92, 246, 0.3)' : 'none',
+                fontWeight: 600, 
+                py: 1.2,
+                borderRadius: '6px',
+                fontSize: { xs: '0.8rem', sm: '0.9rem' },
+                color: loginType === 'superAdmin' ? WHITE : TEXT_COLOR_DARK,
+                background: loginType === 'superAdmin' ? getButtonColor() : 'transparent', // Secondary Purple flat color
+                boxShadow: 'none',
                 '&:hover': { 
-                  background: loginType === 'superAdmin' ? 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)' : '#e5e7eb',
-                  transform: loginType === 'superAdmin' ? 'translateY(-2px)' : 'none',
-                  transition: 'all 0.3s ease'
+                  background: loginType === 'superAdmin' ? PRIMARY_COLOR : '#E5E7EB',
                 }
               }}
             >
@@ -278,7 +264,7 @@ const LoginPage = () => {
             </Button>
           </Box>
 
-          <Box component="form" onSubmit={handleLogin} sx={{ position: 'relative', zIndex: 1 }}>
+          <Box component="form" onSubmit={handleLogin}>
             <TextField 
               margin="normal" 
               required 
@@ -293,26 +279,21 @@ const LoginPage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <EmailOutlinedIcon sx={{ color: '#10b981', fontSize: 24 }} />
+                    <EmailOutlinedIcon sx={{ color: getAccentColor(), fontSize: 24 }} />
                   </InputAdornment>
                 ),
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  bgcolor: '#f9fafb',
-                  borderRadius: '14px',
-                  fontWeight: 600,
-                  '& fieldset': { borderColor: '#e5e7eb', borderWidth: '2px' },
-                  '&:hover fieldset': { borderColor: '#10b981', borderWidth: '2px' },
-                  '&.Mui-focused fieldset': { borderColor: '#10b981', borderWidth: '2px' },
+                  bgcolor: LIGHT_BACKGROUND,
+                  borderRadius: '8px',
+                  fontWeight: 500,
+                  '& fieldset': { borderColor: '#E5E7EB' },
+                  '&:hover fieldset': { borderColor: getAccentColor(), borderWidth: '1px' },
+                  '&.Mui-focused fieldset': { borderColor: getAccentColor(), borderWidth: '2px' },
                 },
-                '& .MuiInputLabel-root': {
-                  fontWeight: 600,
-                  color: '#6b7280'
-                },
-                '& .MuiInputLabel-root.Mui-focused': {
-                  color: '#10b981'
-                }
+                '& .MuiInputLabel-root': { fontWeight: 500, color: '#6B7280' },
+                '& .MuiInputLabel-root.Mui-focused': { color: getAccentColor() }
               }}
             />
             
@@ -330,7 +311,7 @@ const LoginPage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LockOutlinedIcon sx={{ color: '#10b981', fontSize: 24 }} />
+                    <LockOutlinedIcon sx={{ color: getAccentColor(), fontSize: 24 }} />
                   </InputAdornment>
                 ),
                 endAdornment: (
@@ -339,13 +320,7 @@ const LoginPage = () => {
                       onClick={() => setShowPassword(!showPassword)}
                       edge="end"
                       size="medium"
-                      sx={{ 
-                        color: '#6b7280',
-                        '&:hover': { 
-                          bgcolor: '#f3f4f6',
-                          color: '#10b981'
-                        }
-                      }}
+                      sx={{ color: '#6B7280' }}
                     >
                       {showPassword ? <VisibilityOffOutlinedIcon /> : <VisibilityOutlinedIcon />}
                     </IconButton>
@@ -354,20 +329,15 @@ const LoginPage = () => {
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  bgcolor: '#f9fafb',
-                  borderRadius: '14px',
-                  fontWeight: 600,
-                  '& fieldset': { borderColor: '#e5e7eb', borderWidth: '2px' },
-                  '&:hover fieldset': { borderColor: '#10b981', borderWidth: '2px' },
-                  '&.Mui-focused fieldset': { borderColor: '#10b981', borderWidth: '2px' },
+                  bgcolor: LIGHT_BACKGROUND,
+                  borderRadius: '8px',
+                  fontWeight: 500,
+                  '& fieldset': { borderColor: '#E5E7EB' },
+                  '&:hover fieldset': { borderColor: getAccentColor(), borderWidth: '1px' },
+                  '&.Mui-focused fieldset': { borderColor: getAccentColor(), borderWidth: '2px' },
                 },
-                '& .MuiInputLabel-root': {
-                  fontWeight: 600,
-                  color: '#6b7280'
-                },
-                '& .MuiInputLabel-root.Mui-focused': {
-                  color: '#10b981'
-                }
+                '& .MuiInputLabel-root': { fontWeight: 500, color: '#6B7280' },
+                '& .MuiInputLabel-root.Mui-focused': { color: getAccentColor() }
               }}
             />
             
@@ -376,13 +346,12 @@ const LoginPage = () => {
                 severity="error" 
                 sx={{ 
                   mt: 3,
-                  border: '2px solid #fecaca',
-                  bgcolor: '#fef2f2',
-                  borderRadius: '14px',
-                  fontWeight: 600,
-                  '& .MuiAlert-icon': {
-                    color: '#dc2626'
-                  }
+                  border: '1px solid #FCA5A5',
+                  bgcolor: '#FEF2F2',
+                  borderRadius: '8px',
+                  fontWeight: 500,
+                  color: '#DC2626',
+                  '& .MuiAlert-icon': { color: '#DC2626' }
                 }}
               >
                 {error}
@@ -398,27 +367,25 @@ const LoginPage = () => {
                 mt: 4, 
                 mb: 2,
                 background: getButtonColor(),
-                py: 1.8,
+                py: 1.5, // Reduced padding
                 textTransform: 'none',
-                fontSize: { xs: '1rem', sm: '1.1rem' },
-                fontWeight: 800,
-                borderRadius: '14px',
-                boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
-                border: '2px solid rgba(255,255,255,0.2)',
+                fontSize: '1.1rem',
+                fontWeight: 700,
+                borderRadius: '8px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
                 '&:hover': {
-                  boxShadow: '0 8px 30px rgba(0,0,0,0.25)',
-                  transform: 'translateY(-3px)',
-                  transition: 'all 0.3s ease'
+                  background: loginType === 'admin' ? '#D97706' : (loginType === 'superAdmin' ? PRIMARY_COLOR : SECONDARY_COLOR),
+                  boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
                 },
                 '&:disabled': {
-                  background: '#e5e7eb',
-                  color: '#9ca3af'
+                  background: '#E5E7EB',
+                  color: '#9CA3AF'
                 }
               }} 
               disabled={isLoading}
             >
               {isLoading ? (
-                <CircularProgress size={28} sx={{ color: 'white' }} />
+                <CircularProgress size={28} sx={{ color: WHITE }} />
               ) : (
                 getButtonText()
               )}
@@ -429,12 +396,11 @@ const LoginPage = () => {
                 label="OR" 
                 size="small" 
                 sx={{ 
-                  bgcolor: '#f3f4f6',
-                  color: '#6b7280',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  px: 2,
-                  border: '2px solid #e5e7eb'
+                  bgcolor: LIGHT_BACKGROUND,
+                  color: '#6B7280',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  border: '1px solid #E5E7EB'
                 }} 
               />
             </Divider>
@@ -445,9 +411,9 @@ const LoginPage = () => {
                   to="/forgot-password"
                   style={{ 
                     textDecoration: 'none',
-                    color: '#10b981',
+                    color: PRIMARY_COLOR, // Primary Pegorion color
                     fontSize: '0.95rem',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px'
@@ -461,9 +427,9 @@ const LoginPage = () => {
                   to="/register"
                   style={{ 
                     textDecoration: 'none',
-                    color: '#8b5cf6',
+                    color: SECONDARY_COLOR, // Secondary Pegorion color
                     fontSize: '0.95rem',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: { xs: 'flex-start', sm: 'flex-end' },
@@ -479,19 +445,8 @@ const LoginPage = () => {
 
         {/* Footer */}
         <Box sx={{ mt: 4, textAlign: 'center' }}>
-          <Typography variant="body1" sx={{ color: '#374151', fontWeight: 700 }}>
-            © 2025 Employee Management System
-          </Typography>
-          <Typography variant="body2" sx={{ 
-            mt: 1,
-            color: '#6b7280',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 1
-          }}>
-            
+          <Typography variant="body2" sx={{ color: '#6B7280', fontWeight: 500 }}>
+            © {new Date().getFullYear()} Pegorion Software Solutions
           </Typography>
         </Box>
       </Container>

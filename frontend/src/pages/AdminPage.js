@@ -5,7 +5,11 @@ import {
   Paper, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, TextField, InputAdornment, Grid, 
   Chip, Alert, Card, CardContent,
-  Tooltip, IconButton
+  Tooltip, IconButton, CircularProgress,
+  Menu, // <-- NEW IMPORT
+  MenuItem, // <-- NEW IMPORT
+  ListItemIcon, // <-- NEW IMPORT
+  ListItemText // <-- NEW IMPORT
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
@@ -20,10 +24,40 @@ import PeopleIcon from '@mui/icons-material/People';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'; // <-- NEW IMPORT
+import DescriptionIcon from '@mui/icons-material/Description'; // <-- NEW IMPORT
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
 import UserFormModal from '../components/UserFormModal';
 import { useAuth } from '../context/AuthContext';
+
+// --- PEGORION BRANDING COLORS ---
+const PRIMARY_COLOR = '#5A45FF'; // Pegorion Primary Blue-Purple
+const SECONDARY_COLOR = '#8B5CF6'; // Pegorion Lighter Purple Accent
+const TEXT_COLOR = '#1F2937';
+const LIGHT_BACKGROUND = '#F9FAFB';
+
+// Role Color Mapping for Chips (using brand colors and standard alerts)
+const getRoleChipStyle = (role) => {
+  switch (role) {
+    case 'superadmin': return { background: PRIMARY_COLOR, color: 'white' };
+    case 'admin': return { background: SECONDARY_COLOR, color: 'white' };
+    case 'hr': return { background: '#F59E0B', color: 'white' }; // Amber for HR
+    default: return { background: '#6B7280', color: 'white' }; // Gray for Employee
+  }
+};
+
+// Document Status Color Mapping
+const getStatusChipStyle = (status) => {
+    switch (status) {
+        case 'Final Verification Completed': return { background: '#10B981', color: 'white' }; // Green
+        case 'Not Uploaded': return { background: '#6B7280', color: 'white' }; // Gray
+        case 'Rejected': return { background: '#EF4444', color: 'white' }; // Red
+        case 'Pending': 
+        case 'Approved':
+        default: return { background: '#F59E0B', color: 'white' }; // Amber/Yellow
+    }
+};
 
 const AdminPage = () => {
   const navigate = useNavigate();
@@ -38,8 +72,8 @@ const AdminPage = () => {
 
   const hasSuperAdminRights = user?.role === 'superadmin';
 
-  // --- CORRECTED STATISTICS LOGIC ---
-  const getStatistics = () => {
+  // --- STATISTICS LOGIC ---
+  const getStatistics = useCallback(() => {
     const total = employees.length;
     
     // Count verified: all documents verified
@@ -55,8 +89,7 @@ const AdminPage = () => {
       emp.documents.some(d => d.status !== 'Verified')
     ).length;
     
-    // Count admins and superadmins separately
-     const admins = employees.filter(emp => 
+    const admins = employees.filter(emp => 
       emp.role === 'admin' || emp.role === 'hr'
     ).length;
     
@@ -65,7 +98,8 @@ const AdminPage = () => {
     ).length;
     
     return { total, verified, pending, admins, superAdmins };
-  };
+  }, [employees]);
+  
   const stats = getStatistics();
 
 
@@ -91,6 +125,7 @@ const AdminPage = () => {
     try {
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error("Auth failed.");
+      // Use the /api/admin/employees route (from hr.js, but /admin/ is the prefix)
       const response = await axios.get('http://localhost:8080/api/admin/employees', { 
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -117,7 +152,10 @@ const AdminPage = () => {
     if (!window.confirm(`Delete ${userName}? This cannot be undone.`)) return;
     const token = localStorage.getItem('authToken');
     try {
-      await axios.delete(`http://localhost:8080/api/admin/employees/${userId}`, {
+      // Admin/HR should probably call an /api/admin/employees/:id route
+      // But based on your backend files, only /api/superAdmin/employees/:id exists for delete
+      // Using superAdmin route as it's the only one provided for DELETE
+      await axios.delete(`http://localhost:8080/api/superAdmin/employees/${userId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       showNotification(`${userName} deleted successfully.`, 'success');
@@ -127,10 +165,67 @@ const AdminPage = () => {
     }
   };
 
-  // --- Export ---
-  const handleExport = () => {
-    showNotification("Export initiated.", 'info');
+  // --- NEW EXPORT LOGIC ---
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportAnchorEl, setExportAnchorEl] = useState(null);
+  const isExportMenuOpen = Boolean(exportAnchorEl);
+
+  const handleExportMenuOpen = (event) => {
+    setExportAnchorEl(event.currentTarget);
   };
+
+  const handleExportMenuClose = () => {
+    setExportAnchorEl(null);
+  };
+
+  /**
+   * Handles the file download from the API
+   * @param {'excel' | 'pdf'} format The file format to export.
+   */
+  const handleExport = async (format) => {
+    handleExportMenuClose();
+    setIsExporting(true);
+    showNotification(`Generating ${format.toUpperCase()} export...`, 'info');
+
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      showNotification("Authentication token not found.", 'error');
+      setIsExporting(false);
+      return;
+    }
+
+    const filename = `employees.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+    // Use the /api/superAdmin/ export route as it authorizes admin/hr roles
+    const url = `http://localhost:8080/api/superAdmin/export/${format}`;
+
+    try {
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob', // This is critical for file downloads
+      });
+
+      // Create a temporary link to trigger the browser download
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+
+      // Clean up the temporary link
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+
+      showNotification('Export successful!', 'success');
+    } catch (error) {
+      console.error('Export failed:', error);
+      showNotification('Failed to generate export.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+  // --- END EXPORT LOGIC ---
+
 
   const getDisplayStatus = (documents) => {
     if (!documents || documents.length === 0) return 'Not Uploaded';
@@ -150,37 +245,36 @@ const AdminPage = () => {
   return (
     <Box sx={{ 
       minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #dbeafe 100%)',
+      background: LIGHT_BACKGROUND, // Clean, light background
       pb: 4
     }}>
-      {/* AppBar */}
+      {/* AppBar - Clean White with Primary Color Accent */}
       <AppBar 
         position="static" 
         elevation={0} 
         sx={{ 
-          background: 'linear-gradient(90deg, #ffffff 0%, #f9fafb 100%)',
-          borderBottom: '2px solid #e5e7eb',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+          background: 'white',
+          borderBottom: '1px solid #E5E7EB',
         }}
       >
         <Toolbar sx={{ py: 1.5, px: { xs: 2, sm: 4 } }}>
           <Box sx={{
             display: 'flex',
             alignItems: 'center',
-            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-            borderRadius: '12px',
-            p: 1,
+            background: PRIMARY_COLOR,
+            borderRadius: '8px',
+            p: 0.8,
             mr: 2,
-            boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
+            boxShadow: '0 4px 15px rgba(90, 69, 255, 0.3)'
           }}>
             <AdminPanelSettingsIcon sx={{ color: 'white', fontSize: 28 }} />
           </Box>
           <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#111827', letterSpacing: '-0.025em' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: TEXT_COLOR }}>
               Admin Control Center
             </Typography>
             <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 500 }}>
-              Manage Your Workforce
+              Pegorion Workforce Management
             </Typography>
           </Box>
           <Chip 
@@ -188,10 +282,7 @@ const AdminPage = () => {
             sx={{ 
               mr: 2, 
               fontWeight: 700,
-              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-              color: 'white',
-              letterSpacing: '1px',
-              boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
+              ...getRoleChipStyle(user?.role), // Use simplified role style
             }} 
           />
           <Button 
@@ -200,16 +291,14 @@ const AdminPage = () => {
             sx={{ 
               textTransform: 'none',
               fontWeight: 600,
-              borderColor: '#d1d5db',
-              borderWidth: '2px',
-              color: '#374151',
+              borderColor: '#D1D5DB',
+              color: TEXT_COLOR,
               px: 3,
               py: 1,
-              borderRadius: '10px',
+              borderRadius: '8px',
               '&:hover': {
-                borderWidth: '2px',
-                borderColor: '#9ca3af',
-                bgcolor: '#f9fafb'
+                borderColor: PRIMARY_COLOR,
+                bgcolor: 'rgba(90, 69, 255, 0.05)'
               }
             }}
           >
@@ -222,14 +311,13 @@ const AdminPage = () => {
         {/* Header */}
         <Box sx={{ mb: 4 }}>
           <Typography variant="h3" sx={{ 
-            fontWeight: 900, 
-            color: '#111827',
-            letterSpacing: '-0.5px',
+            fontWeight: 800, 
+            color: TEXT_COLOR,
             mb: 1
           }}>
             Employee Management
           </Typography>
-          <Typography variant="h6" sx={{ color: '#6b7280', fontWeight: 600 }}>
+          <Typography variant="h6" sx={{ color: '#6b7280', fontWeight: 400 }}>
             Streamline your workforce operations
           </Typography>
           
@@ -238,140 +326,63 @@ const AdminPage = () => {
             icon={<InfoOutlinedIcon />} 
             sx={{ 
               mt: 3,
-              borderRadius: '16px',
-              border: '2px solid #bfdbfe',
-              bgcolor: '#eff6ff',
-              fontWeight: 600
+              borderRadius: '12px',
+              border: '1px solid #BFDBFE',
+              bgcolor: '#EFF6FF',
+              fontWeight: 500,
+              color: '#1E40AF'
             }}
           >
-            Send OTP credentials, verify documents, and manage permissions. Superadmin required for admin deletions.
+            Send OTP credentials, verify documents, and manage permissions. **Superadmin** status is required to delete other administrators.
           </Alert>
         </Box>
 
         {/* Statistics Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card elevation={0} sx={{ 
-              borderRadius: '20px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              transition: 'all 0.3s ease',
-              '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 12px 30px rgba(102, 126, 234, 0.3)' }
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Box sx={{ 
-                    bgcolor: 'rgba(255, 255, 255, 0.2)', 
-                    borderRadius: '12px', 
-                    p: 1.5
-                  }}>
-                    <PeopleIcon sx={{ fontSize: 40 }} />
-                  </Box>
-                </Box>
-                <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
-                  {stats.total}
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Total Employees
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card elevation={0} sx={{ 
-              borderRadius: '20px',
-              background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-              color: 'white',
-              transition: 'all 0.3s ease',
-              '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 12px 30px rgba(17, 153, 142, 0.3)' }
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Box sx={{ 
-                    bgcolor: 'rgba(255, 255, 255, 0.2)', 
-                    borderRadius: '12px', 
-                    p: 1.5
-                  }}>
-                    <VerifiedUserIcon sx={{ fontSize: 40 }} />
-                  </Box>
-                </Box>
-                <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
-                  {stats.verified}
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Verified Documents
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card elevation={0} sx={{ 
-              borderRadius: '20px',
-              background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-              color: 'white',
-              transition: 'all 0.3s ease',
-              '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 12px 30px rgba(240, 147, 251, 0.3)' }
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Box sx={{ 
-                    bgcolor: 'rgba(255, 255, 255, 0.2)', 
-                    borderRadius: '12px', 
-                    p: 1.5
-                  }}>
-                    <HourglassEmptyIcon sx={{ fontSize: 40 }} />
-                  </Box>
-                </Box>
-                <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
-                  {stats.pending}
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Pending / Not Uploaded
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card elevation={0} sx={{ 
-              borderRadius: '20px',
-              background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-              color: 'white',
-              transition: 'all 0.3s ease',
-              '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 12px 30px rgba(250, 112, 154, 0.3)' }
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Box sx={{ 
-                    bgcolor: 'rgba(255, 255, 255, 0.2)', 
-                    borderRadius: '12px', 
-                    p: 1.5
-                  }}>
-                    <SupervisorAccountIcon sx={{ fontSize: 40 }} />
-                  </Box>
-                </Box>
-                <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
-                  {stats.admins + stats.superAdmins}
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Admins ({stats.admins}) + Super ({stats.superAdmins})
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
+          {/* Card Template using Primary Color */}
+          {[{ title: 'Total Employees', value: stats.total, icon: PeopleIcon, color: PRIMARY_COLOR },
+            { title: 'Verified Documents', value: stats.verified, icon: VerifiedUserIcon, color: '#10B981' }, // Green for success
+            { title: 'Pending / Not Uploaded', value: stats.pending, icon: HourglassEmptyIcon, color: '#F59E0B' }, // Amber for warning
+            { title: 'Admin & HR Roles', value: stats.admins + stats.superAdmins, icon: SupervisorAccountIcon, color: SECONDARY_COLOR }]
+            .map((item, index) => (
+              <Grid item xs={12} sm={6} md={3} key={index}>
+                <Card elevation={4} sx={{ 
+                  borderRadius: '12px',
+                  bgcolor: 'white',
+                  borderLeft: `5px solid ${item.color}`, // Use color accent on the side
+                  transition: 'all 0.3s ease',
+                  '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 10px 20px rgba(0,0,0,0.08)' }
+                }}>
+                  <CardContent sx={{ p: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#6B7280' }}>
+                        {item.title}
+                      </Typography>
+                      <item.icon sx={{ fontSize: 28, color: item.color }} />
+                    </Box>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: TEXT_COLOR }}>
+                      {item.value}
+                    </Typography>
+                    {/* Display breakdown for Admin/HR */}
+                    {item.title === 'Admin & HR Roles' && (
+                        <Typography variant="caption" sx={{ color: '#6B7280' }}>
+                            ({stats.admins} Admin/HR + {stats.superAdmins} Super)
+                        </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+          ))}
         </Grid>
 
-        {/* Search Bar */}
+        {/* Search Bar & Actions */}
         <Paper 
-          elevation={0}
+          elevation={1}
           sx={{ 
             mb: 4, 
             p: 3, 
-            borderRadius: '20px',
-            border: '2px solid #e5e7eb',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+            borderRadius: '12px',
+            border: '1px solid #E5E7EB',
           }}
         >
           <Grid container spacing={3} alignItems="center">
@@ -385,21 +396,20 @@ const AdminPage = () => {
                 InputProps={{ 
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon sx={{ color: '#8b5cf6', fontSize: 24 }} />
+                      <SearchIcon sx={{ color: PRIMARY_COLOR, fontSize: 24 }} />
                     </InputAdornment>
                   ) 
                 }}
                 sx={{ 
                   '& .MuiOutlinedInput-root': { 
-                    borderRadius: '14px',
-                    bgcolor: '#f9fafb',
-                    fontWeight: 600,
-                    '& fieldset': { borderColor: '#e5e7eb', borderWidth: '2px' },
-                    '&:hover fieldset': { borderColor: '#8b5cf6', borderWidth: '2px' },
-                    '&.Mui-focused fieldset': { borderColor: '#8b5cf6', borderWidth: '2px' }
+                    borderRadius: '8px',
+                    bgcolor: 'white',
+                    '& fieldset': { borderColor: '#e5e7eb' },
+                    '&:hover fieldset': { borderColor: SECONDARY_COLOR },
+                    '&.Mui-focused fieldset': { borderColor: PRIMARY_COLOR, borderWidth: '2px' }
                   },
                   '& .MuiInputLabel-root': { fontWeight: 600, color: '#6b7280' },
-                  '& .MuiInputLabel-root.Mui-focused': { color: '#8b5cf6' }
+                  '& .MuiInputLabel-root.Mui-focused': { color: PRIMARY_COLOR }
                 }}
               />
             </Grid>
@@ -409,44 +419,68 @@ const AdminPage = () => {
                 startIcon={<PersonAddIcon />}
                 onClick={() => { setEditingUser(null); setIsModalOpen(true); }}
                 sx={{ 
-                  borderRadius: '14px', 
-                  px: 4, 
-                  py: 1.5,
+                  borderRadius: '8px', 
+                  px: 3, 
+                  py: 1,
                   mr: 2,
                   fontWeight: 700,
-                  background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                  boxShadow: '0 6px 20px rgba(139, 92, 246, 0.3)',
+                  bgcolor: PRIMARY_COLOR,
                   textTransform: 'none',
+                  boxShadow: '0 4px 15px rgba(90, 69, 255, 0.3)',
                   '&:hover': {
-                    boxShadow: '0 8px 30px rgba(139, 92, 246, 0.5)',
-                    transform: 'translateY(-2px)'
+                    bgcolor: SECONDARY_COLOR,
                   }
                 }}
               >
                 Add Employee
               </Button>
+              
+              {/* === UPDATED EXPORT BUTTON === */}
               <Button 
                 variant="outlined" 
                 startIcon={<FileDownloadIcon />}
-                onClick={handleExport}
+                onClick={handleExportMenuOpen} // <-- UPDATED
+                disabled={isExporting} // <-- NEW
                 sx={{ 
-                  borderRadius: '14px', 
-                  px: 4, 
-                  py: 1.5,
+                  borderRadius: '8px', 
+                  px: 3, 
+                  py: 1,
                   fontWeight: 700,
-                  borderWidth: '2px',
-                  borderColor: '#8b5cf6',
-                  color: '#8b5cf6',
+                  borderColor: PRIMARY_COLOR,
+                  color: PRIMARY_COLOR,
                   textTransform: 'none',
                   '&:hover': {
-                    borderWidth: '2px',
-                    bgcolor: 'rgba(139, 92, 246, 0.1)',
-                    transform: 'translateY(-2px)'
+                    borderColor: PRIMARY_COLOR,
+                    bgcolor: 'rgba(90, 69, 255, 0.05)',
                   }
                 }}
               >
-                Export
+                {isExporting ? 'Exporting...' : 'Export Data'}
               </Button>
+
+              {/* === NEW EXPORT MENU === */}
+              <Menu
+                anchorEl={exportAnchorEl}
+                open={isExportMenuOpen}
+                onClose={handleExportMenuClose}
+                MenuListProps={{
+                  'aria-labelledby': 'export-button',
+                }}
+              >
+                <MenuItem onClick={() => handleExport('excel')}>
+                  <ListItemIcon>
+                    <DescriptionIcon fontSize="small" sx={{ color: '#10B981' }} />
+                  </ListItemIcon>
+                  <ListItemText primary="Export as Excel (.xlsx)" />
+                </MenuItem>
+                <MenuItem onClick={() => handleExport('pdf')}>
+                  <ListItemIcon>
+                    <PictureAsPdfIcon fontSize="small" sx={{ color: '#EF4444' }} />
+                  </ListItemIcon>
+                  <ListItemText primary="Export as PDF (.pdf)" />
+                </MenuItem>
+              </Menu>
+
             </Grid>
           </Grid>
         </Paper>
@@ -454,25 +488,24 @@ const AdminPage = () => {
         {/* Table */}
         <TableContainer 
           component={Paper} 
-          elevation={0}
+          elevation={1}
           sx={{ 
-            borderRadius: '20px',
-            border: '2px solid #e5e7eb',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+            borderRadius: '12px',
+            border: '1px solid #E5E7EB',
           }}
         >
           <Table>
             <TableHead>
-              <TableRow sx={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}>
-                {['Employee ID', 'Name', 'Email', 'DOB', 'Phone', 'Role', 'Document Status', 'Actions'].map((head) => (
+              {/* Clean Table Header with Primary Color */}
+              <TableRow sx={{ bgcolor: PRIMARY_COLOR }}>
+                {['ID', 'Name', 'Email', 'DOB', 'Role', 'Document Status', 'Actions'].map((head) => (
                   <TableCell 
                     key={head} 
                     sx={{ 
                       fontWeight: 700, 
                       color: 'white', 
-                      fontSize: '0.9rem', 
-                      py: 2.5,
-                      letterSpacing: '0.5px'
+                      fontSize: '0.85rem', 
+                      py: 1.5,
                     }}
                   >
                     {head}
@@ -481,10 +514,12 @@ const AdminPage = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredEmployees.length === 0 ? (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={7} align="center"><CircularProgress size={30} sx={{ py: 2, color: PRIMARY_COLOR }} /></TableCell></TableRow>
+              ) : filteredEmployees.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
-                    <PeopleIcon sx={{ fontSize: 64, mb: 2, color: '#8b5cf6' }} />
+                  <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                    <PeopleIcon sx={{ fontSize: 48, mb: 2, color: PRIMARY_COLOR }} />
                     <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 600 }}>
                       No employees found
                     </Typography>
@@ -495,102 +530,70 @@ const AdminPage = () => {
                   <TableRow 
                     key={emp._id || emp.id} 
                     sx={{ 
-                      '&:hover': { bgcolor: 'rgba(139, 92, 246, 0.05)' }
+                      '&:nth-of-type(odd)': { bgcolor: LIGHT_BACKGROUND },
+                      '&:hover': { bgcolor: 'rgba(90, 69, 255, 0.03)' }
                     }}
                   >
-                    <TableCell sx={{ fontWeight: 700, color: '#8b5cf6' }}>{emp.employeeId || emp.id}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{emp.name}</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: PRIMARY_COLOR }}>{emp.employeeId || emp.id}</TableCell>
+                    <TableCell sx={{ fontWeight: 500 }}>{emp.name}</TableCell>
                     <TableCell sx={{ color: '#64748b' }}>{emp.email}</TableCell>
                     <TableCell>{emp.dob ? emp.dob.substring(0, 10) : 'N/A'}</TableCell>
-                    <TableCell>{emp.phone || 'N/A'}</TableCell>
                     <TableCell>
                       <Chip 
                         label={emp.role?.toUpperCase() || 'N/A'}
                         size="small"
-                        sx={{ 
-                          fontWeight: 700, 
-                          color: 'white',
-                          background: emp.role === 'superadmin' ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
-                                   : emp.role === 'admin' ? 'linear-gradient(135deg, #c948b8ff 0%, #94135eff 100%)'
-                                   : emp.role === 'employee' ? 'linear-gradient(135deg, #197b2dff 0%, #226daeff 100%)'
-                                   : 'linear-gradient(135deg, #9755b1ff 0%, #241193ff 100%)' 
-                        }}
-                      />  
+                        sx={{ fontWeight: 700, ...getRoleChipStyle(emp.role) }}
+                      />  
                     </TableCell>
                     <TableCell>
                       <Chip 
                         label={getDisplayStatus(emp.documents)}
                         size="small"
-                        sx={{ 
-                          fontWeight: 700, 
-                          color: 'white',
-                          background: getDisplayStatus(emp.documents) === 'Final Verification Completed' ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' :
-                                    getDisplayStatus(emp.documents) === 'Not Uploaded' ? 'linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%)' :
-                                    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
-                        }}
+                        sx={{ fontWeight: 700, ...getStatusChipStyle(getDisplayStatus(emp.documents)) }}
                       />
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Tooltip title="Verify Documents">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => navigate(`/admin/verify/${emp.employeeId}`)} 
+                            sx={{ color: PRIMARY_COLOR }}
+                          >
+                            <VerifiedUserIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="Send OTP">
                           <IconButton 
                             size="small" 
                             onClick={() => handleSendOTP(emp.email, emp.name)} 
-                            sx={{ 
-                              border: '2px solid #4facfe',
-                              color: '#4facfe',
-                              borderRadius: '8px',
-                              '&:hover': { bgcolor: 'rgba(79, 172, 254, 0.1)' }
-                            }}
+                            sx={{ color: SECONDARY_COLOR }}
                           >
                             <EmailSendIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Edit">
+                        <Tooltip title="Edit User">
                           <IconButton 
                             size="small" 
                             onClick={() => { setEditingUser(emp); setIsModalOpen(true); }} 
-                            sx={{ 
-                              border: '2px solid #8b5cf6',
-                              color: '#8b5cf6',
-                              borderRadius: '8px',
-                              '&:hover': { bgcolor: 'rgba(139, 92, 246, 0.1)' }
-                            }}
+                            sx={{ color: '#F59E0B' }}
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Delete">
+                        <Tooltip title="Delete User">
                           <IconButton 
                             size="small" 
                             onClick={() => handleDeleteUser(emp._id || emp.id, emp.name, emp.role)} 
                             disabled={!hasSuperAdminRights && emp.role !== 'employee'} 
                             sx={{ 
-                              border: '2px solid #f5576c',
-                              color: '#f5576c',
-                              borderRadius: '8px',
-                              '&:hover': { bgcolor: 'rgba(245, 87, 108, 0.1)' },
+                              color: '#EF4444', 
                               '&:disabled': { opacity: 0.3 }
                             }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Button 
-                          size="small" 
-                          variant="contained" 
-                          onClick={() => navigate(`/admin/verify/${emp.employeeId}`)} 
-                          sx={{ 
-                            borderRadius: '8px', 
-                            fontWeight: 700,
-                            textTransform: 'none',
-                            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                            boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
-                            px: 2
-                          }}
-                        >
-                          Verify
-                        </Button>
                       </Box>
                     </TableCell>
                   </TableRow>

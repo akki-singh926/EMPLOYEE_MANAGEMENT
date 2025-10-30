@@ -10,7 +10,6 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
 
-// --- Backend Constants ---
 const API_URL = 'http://localhost:8080/api/hr/documents'; 
 const BACKEND_HOST = 'http://localhost:8080';
 const UPLOADS_PATH = '/uploads';
@@ -20,7 +19,6 @@ const DocumentVerificationList = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { showNotification } = useNotification();
 
-  // --- 1. FETCH PENDING DOCUMENTS ---
   const fetchPendingDocuments = useCallback(async () => {
     setIsLoading(true);
     const token = localStorage.getItem('authToken');
@@ -36,11 +34,9 @@ const DocumentVerificationList = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Remove duplicates based on _id
       const docs = response.data.documents || [];
       const uniqueDocuments = Array.from(new Map(docs.map(d => [d._id, d])).values());
       
-      // Fix file URLs
       uniqueDocuments.forEach(doc => {
         doc.fileUrl = doc.filename ? `${BACKEND_HOST}${UPLOADS_PATH}/${doc.filename}` : '#';
       });
@@ -59,7 +55,6 @@ const DocumentVerificationList = () => {
     fetchPendingDocuments();
   }, [fetchPendingDocuments]);
 
-  // --- 2. UPDATE DOCUMENT STATUS ---
   const updateDocumentStatus = async (doc, newStatus) => {
     const remarks = newStatus === 'Rejected' ? prompt("Please provide a reason for rejection:") : '';
     if (newStatus === 'Rejected' && !remarks) return;
@@ -74,7 +69,12 @@ const DocumentVerificationList = () => {
 
       showNotification(`Document for ${doc.userName} was ${newStatus.toLowerCase()}!`, 'success');
 
-      // Remove document from list
+      // 🔔 Notification to employee
+      showNotification(
+        `Notification sent to ${doc.userName || doc.employeeId}: Your document '${doc.name}' was ${newStatus.toLowerCase()}.`,
+        'info'
+      );
+
       setPendingDocuments(prev => prev.filter(item => item._id !== doc._id));
 
     } catch (error) {
@@ -101,7 +101,7 @@ const DocumentVerificationList = () => {
         <List>
           {pendingDocuments.map((doc) => (
             <ListItem
-              key={doc._id} // Unique _id ensures no duplicates
+              key={doc._id}
               divider
               secondaryAction={
                 <Box>
