@@ -6,10 +6,10 @@ import {
   TableHead, TableRow, TextField, InputAdornment, Grid, 
   Chip, Alert, Card, CardContent,
   Tooltip, IconButton, CircularProgress,
-  Menu, // <-- NEW IMPORT
-  MenuItem, // <-- NEW IMPORT
-  ListItemIcon, // <-- NEW IMPORT
-  ListItemText // <-- NEW IMPORT
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
@@ -24,8 +24,9 @@ import PeopleIcon from '@mui/icons-material/People';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'; // <-- NEW IMPORT
-import DescriptionIcon from '@mui/icons-material/Description'; // <-- NEW IMPORT
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import DescriptionIcon from '@mui/icons-material/Description';
+import HistoryToggleOffIcon from '@mui/icons-material/HistoryToggleOff';
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
 import UserFormModal from '../components/UserFormModal';
@@ -70,7 +71,14 @@ const AdminPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
+  // --- NEW STATE FOR PENDING UPDATES ---
+  const [pendingUpdates, setPendingUpdates] = useState([]);
+  const [remarks, setRemarks] = useState({});
+  const [isPendingLoading, setIsPendingLoading] = useState(true);
+  // ----------------------------------------
+
   const hasSuperAdminRights = user?.role === 'superadmin';
+  const token = localStorage.getItem('authToken');
 
   // --- STATISTICS LOGIC ---
   const getStatistics = useCallback(() => {
@@ -83,7 +91,7 @@ const AdminPage = () => {
     ).length;
     
     // Count pending: no documents OR has documents but not all verified
-    const pending = employees.filter(emp => 
+    const pendingDocs = employees.filter(emp => 
       !emp.documents || 
       emp.documents.length === 0 || 
       emp.documents.some(d => d.status !== 'Verified')
@@ -97,7 +105,7 @@ const AdminPage = () => {
       emp.role === 'superadmin' || emp.role === 'superAdmin'
     ).length;
     
-    return { total, verified, pending, admins, superAdmins };
+    return { total, verified, pendingDocs, admins, superAdmins };
   }, [employees]);
   
   const stats = getStatistics();
@@ -106,7 +114,6 @@ const AdminPage = () => {
   // --- Send OTP ---
   const handleSendOTP = async (employeeEmail, employeeName) => {
     if (!window.confirm(`Send OTP to ${employeeName} (${employeeEmail})?`)) return;
-    const token = localStorage.getItem('authToken');
     try {
       await axios.post('http://localhost:8080/api/hr/send-otp', 
         { employeeEmail }, 
@@ -123,9 +130,7 @@ const AdminPage = () => {
   const fetchEmployees = useCallback(async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('authToken');
       if (!token) throw new Error("Auth failed.");
-      // Use the /api/admin/employees route (from hr.js, but /admin/ is the prefix)
       const response = await axios.get('http://localhost:8080/api/admin/employees', { 
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -138,11 +143,35 @@ const AdminPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [showNotification]);
+  }, [showNotification, token]);
+
+  // --- NEW: Fetch Pending Updates ---
+  const fetchPendingUpdates = useCallback(async () => {
+    setIsPendingLoading(true);
+    try {
+      if (!token) throw new Error("Auth failed.");
+      const res = await axios.get('http://localhost:8080/api/hr/pending-updates', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      // ✅ --- THIS IS THE FIX ---
+      // Backend sends { items: [...] }, not { pending: [...] }
+      setPendingUpdates(res.data.items || []);
+      // -------------------------
+
+    } catch (err) {
+      console.error('Failed to load pending updates:', err);
+      showNotification('Failed to load pending updates.', 'error');
+    } finally {
+      setIsPendingLoading(false);
+    }
+  }, [showNotification, token]);
+  // ----------------------------------
 
   useEffect(() => {
     fetchEmployees();
-  }, [fetchEmployees]);
+    fetchPendingUpdates(); // <-- Fetch both on load
+  }, [fetchEmployees, fetchPendingUpdates]);
 
   // --- Delete User ---
   const handleDeleteUser = async (userId, userName, userRole) => {
@@ -150,11 +179,7 @@ const AdminPage = () => {
       return showNotification("Only Superadmin can delete other Superadmins.", 'error');
     }
     if (!window.confirm(`Delete ${userName}? This cannot be undone.`)) return;
-    const token = localStorage.getItem('authToken');
     try {
-      // Admin/HR should probably call an /api/admin/employees/:id route
-      // But based on your backend files, only /api/superAdmin/employees/:id exists for delete
-      // Using superAdmin route as it's the only one provided for DELETE
       await axios.delete(`http://localhost:8080/api/superAdmin/employees/${userId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -165,7 +190,37 @@ const AdminPage = () => {
     }
   };
 
-  // --- NEW EXPORT LOGIC ---
+  // --- NEW: Handle Approve/Reject Update ---
+  const handleUpdateAction = async (userId, actionType) => {
+    try {
+      await axios.patch(
+        `http://localhost:8080/api/hr/pending-updates/${userId}`,
+        {
+          action: actionType, // "approve" or "reject"
+          remarks: remarks[userId] || '',
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      showNotification(`Profile ${actionType}ed successfully!`, 'success');
+      fetchPendingUpdates(); // refresh pending list
+      fetchEmployees(); // refresh main employee list (in case data changed)
+      
+      // Clear the remark for the processed user
+      setRemarks(prev => {
+        const newRemarks = { ...prev };
+        delete newRemarks[userId];
+        return newRemarks;
+      });
+    } catch (err) {
+      console.error('Error approving/rejecting:', err);
+      showNotification('Failed to update profile status.', 'error');
+    }
+  };
+  // ----------------------------------------
+
+  // --- EXPORT LOGIC ---
   const [isExporting, setIsExporting] = useState(false);
   const [exportAnchorEl, setExportAnchorEl] = useState(null);
   const isExportMenuOpen = Boolean(exportAnchorEl);
@@ -178,44 +233,32 @@ const AdminPage = () => {
     setExportAnchorEl(null);
   };
 
-  /**
-   * Handles the file download from the API
-   * @param {'excel' | 'pdf'} format The file format to export.
-   */
   const handleExport = async (format) => {
     handleExportMenuClose();
     setIsExporting(true);
     showNotification(`Generating ${format.toUpperCase()} export...`, 'info');
 
-    const token = localStorage.getItem('authToken');
     if (!token) {
       showNotification("Authentication token not found.", 'error');
       setIsExporting(false);
       return;
     }
-
     const filename = `employees.${format === 'excel' ? 'xlsx' : 'pdf'}`;
-    // Use the /api/superAdmin/ export route as it authorizes admin/hr roles
     const url = `http://localhost:8080/api/superAdmin/export/${format}`;
 
     try {
       const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
-        responseType: 'blob', // This is critical for file downloads
+        responseType: 'blob',
       });
-
-      // Create a temporary link to trigger the browser download
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = blobUrl;
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
-
-      // Clean up the temporary link
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
-
       showNotification('Export successful!', 'success');
     } catch (error) {
       console.error('Export failed:', error);
@@ -245,10 +288,10 @@ const AdminPage = () => {
   return (
     <Box sx={{ 
       minHeight: '100vh', 
-      background: LIGHT_BACKGROUND, // Clean, light background
+      background: LIGHT_BACKGROUND,
       pb: 4
     }}>
-      {/* AppBar - Clean White with Primary Color Accent */}
+      {/* AppBar */}
       <AppBar 
         position="static" 
         elevation={0} 
@@ -282,7 +325,7 @@ const AdminPage = () => {
             sx={{ 
               mr: 2, 
               fontWeight: 700,
-              ...getRoleChipStyle(user?.role), // Use simplified role style
+              ...getRoleChipStyle(user?.role),
             }} 
           />
           <Button 
@@ -337,19 +380,22 @@ const AdminPage = () => {
           </Alert>
         </Box>
 
-        {/* Statistics Cards */}
+        {/* --- UPDATED Statistics Cards --- */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* Card Template using Primary Color */}
-          {[{ title: 'Total Employees', value: stats.total, icon: PeopleIcon, color: PRIMARY_COLOR },
-            { title: 'Verified Documents', value: stats.verified, icon: VerifiedUserIcon, color: '#10B981' }, // Green for success
-            { title: 'Pending / Not Uploaded', value: stats.pending, icon: HourglassEmptyIcon, color: '#F59E0B' }, // Amber for warning
-            { title: 'Admin & HR Roles', value: stats.admins + stats.superAdmins, icon: SupervisorAccountIcon, color: SECONDARY_COLOR }]
-            .map((item, index) => (
-              <Grid item xs={12} sm={6} md={3} key={index}>
+          {[
+            { title: 'Total Employees', value: stats.total, icon: PeopleIcon, color: PRIMARY_COLOR },
+            { title: 'Verified Documents', value: stats.verified, icon: VerifiedUserIcon, color: '#10B981' }, // Green
+            { title: 'Pending Documents', value: stats.pendingDocs, icon: HourglassEmptyIcon, color: '#F59E0B' }, // Amber
+            // --- NEW STAT CARD ---
+            { title: 'Pending Profile Updates', value: pendingUpdates.length, icon: HistoryToggleOffIcon, color: '#F59E0B' }, // Amber
+            { title: 'Admin & HR Roles', value: stats.admins + stats.superAdmins, icon: SupervisorAccountIcon, color: SECONDARY_COLOR }
+          ].filter(item => item.value !== undefined) // Filter out any potential undefined values
+           .map((item, index) => (
+              <Grid item xs={12} sm={6} md={true} key={index} sx={{ flexGrow: 1 }}>
                 <Card elevation={4} sx={{ 
                   borderRadius: '12px',
                   bgcolor: 'white',
-                  borderLeft: `5px solid ${item.color}`, // Use color accent on the side
+                  borderLeft: `5px solid ${item.color}`,
                   transition: 'all 0.3s ease',
                   '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 10px 20px rgba(0,0,0,0.08)' }
                 }}>
@@ -363,7 +409,6 @@ const AdminPage = () => {
                     <Typography variant="h4" sx={{ fontWeight: 800, color: TEXT_COLOR }}>
                       {item.value}
                     </Typography>
-                    {/* Display breakdown for Admin/HR */}
                     {item.title === 'Admin & HR Roles' && (
                         <Typography variant="caption" sx={{ color: '#6B7280' }}>
                             ({stats.admins} Admin/HR + {stats.superAdmins} Super)
@@ -374,6 +419,90 @@ const AdminPage = () => {
               </Grid>
           ))}
         </Grid>
+        
+        {/* --- NEW: PENDING UPDATES TABLE SECTION --- */}
+        {(isPendingLoading || pendingUpdates.length > 0) && (
+          <Paper
+            elevation={1}
+            sx={{
+              mb: 4,
+              borderRadius: '12px',
+              border: '1px solid #E5E7EB',
+              overflow: 'hidden' // To contain the table
+            }}
+          >
+            <Box sx={{ p: 3 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700, color: TEXT_COLOR, mb: 2 }}>
+                📝 Pending Profile Update Requests
+              </Typography>
+              {isPendingLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress sx={{ color: PRIMARY_COLOR }} />
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'rgba(90, 69, 255, 0.05)' }}>
+                        <TableCell sx={{ fontWeight: 700, color: TEXT_COLOR }}>Employee Name</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: TEXT_COLOR }}>Email</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: TEXT_COLOR }}>Requested Fields</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: TEXT_COLOR }}>Remarks</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: TEXT_COLOR }}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {pendingUpdates.map((item) => (
+                        <TableRow key={item._id} sx={{ '&:hover': { bgcolor: LIGHT_BACKGROUND }}}>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell>{item.email}</TableCell>
+                          <TableCell>
+                            <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontSize: '0.875rem', fontFamily: 'monospace' }}>
+                              {JSON.stringify(item.pendingUpdates?.data, null, 2)}
+                            </pre>
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              placeholder="Remarks"
+                              variant="outlined"
+                              value={remarks[item._id] || ''}
+                              onChange={(e) =>
+                                setRemarks({ ...remarks, [item._id]: e.target.value }) // <-- 🚨 FIX WAS HERE
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button
+                                variant="contained"
+                                color="success"
+                                size="small"
+                                onClick={() => handleUpdateAction(item._id, 'approve')}
+                                >
+                                Approve
+                                </Button>
+                                <Button
+                                variant="contained"
+                                color="error"
+                                size="small"
+                                onClick={() => handleUpdateAction(item._id, 'reject')}
+                                >
+                                Reject
+                                </Button>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+          </Paper>
+        )}
+        {/* ------------------------------------------- */}
+
 
         {/* Search Bar & Actions */}
         <Paper 
@@ -435,12 +564,11 @@ const AdminPage = () => {
                 Add Employee
               </Button>
               
-              {/* === UPDATED EXPORT BUTTON === */}
               <Button 
                 variant="outlined" 
                 startIcon={<FileDownloadIcon />}
-                onClick={handleExportMenuOpen} // <-- UPDATED
-                disabled={isExporting} // <-- NEW
+                onClick={handleExportMenuOpen}
+                disabled={isExporting}
                 sx={{ 
                   borderRadius: '8px', 
                   px: 3, 
@@ -458,7 +586,6 @@ const AdminPage = () => {
                 {isExporting ? 'Exporting...' : 'Export Data'}
               </Button>
 
-              {/* === NEW EXPORT MENU === */}
               <Menu
                 anchorEl={exportAnchorEl}
                 open={isExportMenuOpen}
@@ -485,7 +612,7 @@ const AdminPage = () => {
           </Grid>
         </Paper>
 
-        {/* Table */}
+        {/* --- Main Employee Table --- */}
         <TableContainer 
           component={Paper} 
           elevation={1}
@@ -496,7 +623,6 @@ const AdminPage = () => {
         >
           <Table>
             <TableHead>
-              {/* Clean Table Header with Primary Color */}
               <TableRow sx={{ bgcolor: PRIMARY_COLOR }}>
                 {['ID', 'Name', 'Email', 'DOB', 'Role', 'Document Status', 'Actions'].map((head) => (
                   <TableCell 
@@ -543,7 +669,7 @@ const AdminPage = () => {
                         label={emp.role?.toUpperCase() || 'N/A'}
                         size="small"
                         sx={{ fontWeight: 700, ...getRoleChipStyle(emp.role) }}
-                      />  
+                      />  
                     </TableCell>
                     <TableCell>
                       <Chip 
