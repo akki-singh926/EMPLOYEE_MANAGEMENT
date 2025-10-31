@@ -9,7 +9,7 @@ import {
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
-import { sendNotification } from '../api/Notification'; // ensure path/name is lowercase and matches file
+import { sendNotification } from '../api/Notification'; // path fixed to match file
 
 const FinalVerificationQueue = () => {
   const [documents, setDocuments] = useState([]);
@@ -20,14 +20,13 @@ const FinalVerificationQueue = () => {
   const [finalStatus, setFinalStatus] = useState('Verified');
   const [remarks, setRemarks] = useState('');
 
-  // Employee lookup map: { employeeId: { email, name, ... } }
   const [employeeMap, setEmployeeMap] = useState({});
-
   const { showNotification } = useNotification();
+
   const API_BASE_URL = 'http://localhost:8080/api/superAdmin';
   const UPLOADS_PATH = 'http://localhost:8080/uploads';
 
-  // --- Fetch employee list (to get emails) ---
+  // --- Fetch Employees ---
   const fetchEmployees = useCallback(async () => {
     const token = localStorage.getItem('authToken');
     if (!token) return;
@@ -35,31 +34,23 @@ const FinalVerificationQueue = () => {
       const res = await axios.get(`${API_BASE_URL}/employees`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const list = res.data.employees || [];
       const map = {};
-      list.forEach(emp => {
+      (res.data.employees || []).forEach(emp => {
         if (emp.employeeId) {
-          map[emp.employeeId] = {
-            email: emp.email,
-            name: emp.name
-          };
+          map[emp.employeeId] = { email: emp.email, name: emp.name };
         }
       });
       setEmployeeMap(map);
     } catch (err) {
-      console.error('Failed to fetch employees for email lookup:', err);
-      // Not fatal — we can still proceed (but notifications will warn)
+      console.error('Failed to fetch employees:', err);
     }
   }, []);
 
-  // --- Fetch verified docs ---
+  // --- Fetch Docs ---
   const fetchVerificationQueue = useCallback(async () => {
     setIsLoading(true);
     const token = localStorage.getItem('authToken');
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
+    if (!token) return setIsLoading(false);
     try {
       const response = await axios.get(`${API_BASE_URL}/verified-documents`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -67,25 +58,21 @@ const FinalVerificationQueue = () => {
       setDocuments(response.data.documents || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
-      showNotification('Failed to load documents for final review.', 'error');
+      showNotification('Failed to load documents.', 'error');
     } finally {
       setIsLoading(false);
     }
   }, [showNotification]);
 
   useEffect(() => {
-    fetchEmployees();         // build email lookup
-    fetchVerificationQueue(); // load docs
+    fetchEmployees();
+    fetchVerificationQueue();
   }, [fetchEmployees, fetchVerificationQueue]);
 
-  // --- Helper: find real email by employeeId ---
-  const lookupEmail = (employeeId) => {
-    if (!employeeId) return null;
-    if (employeeMap[employeeId] && employeeMap[employeeId].email) return employeeMap[employeeId].email;
-    return null;
-  };
+  const lookupEmail = (id) => employeeMap[id]?.email || null;
+  const lookupName = (id) => employeeMap[id]?.name || 'Employee';
 
-  // --- Handle Final Verification ---
+  // --- Handle Verification / Rejection ---
   const handleFinalVerification = async () => {
     if (!selectedDoc) return;
     setIsSubmitting(true);
@@ -98,37 +85,50 @@ const FinalVerificationQueue = () => {
     }
 
     try {
-      // 1️⃣ Update verification status in DB
+      // Update backend
       await axios.patch(
         `${API_BASE_URL}/documents/${selectedDoc.employeeId}/${selectedDoc._id}/verify`,
         { finalStatus, remarks },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // 2️⃣ Resolve correct email from employees endpoint (frontend lookup)
-      const realEmail = lookupEmail(selectedDoc.employeeId);
+      const email = lookupEmail(selectedDoc.employeeId);
+      const name = lookupName(selectedDoc.employeeId);
+      const docName = selectedDoc.name || 'document';
 
-      const subject = `Document ${finalStatus}`;
-      // Get the employee's real name from the employeeMap
-const empName = employeeMap[selectedDoc.employeeId]?.name || 'Employee';
-const docName = selectedDoc.name || 'document';
+      // ✅ Email formatting similar to backend style
+      let subject, htmlMessage;
 
-const message =
-  finalStatus === 'Verified'
-    ? `Hi ${empName}, your document "${docName}" has been verified by the Super Admin.`
-    : `Hi ${empName}, your document "${docName}" has been rejected. Remarks: ${remarks}`;
-
-      if (realEmail && realEmail.includes('@')) {
-        // sendNotification expects (to, subject, text, token)
-        await sendNotification(realEmail, subject, message, token);
-        console.log('📧 Email sent to:', realEmail);
-      } else {
-        // if we couldn't find the email, warn instead of using fake fallback
-        console.warn('⚠️ No valid email found for this employee:', selectedDoc.employeeId);
-        showNotification('No valid email found for this employee; notification not sent.', 'warning');
+      if (finalStatus === 'Verified') {
+        subject = `✅ Document Verified Successfully`;
+        htmlMessage = `
+          <p>Hello ${name},</p>
+          <p>Your submitted document <b>${docName}</b> has been <strong style="color:green;">verified</strong> by the Super Admin.</p>
+          <p>You may now proceed with the next steps in your profile or HR process.</p>
+          <br/>
+          <p>Regards,<br/>Super Admin Team</p>
+        `;
+      } else if (finalStatus === 'Rejected') {
+        subject = `❌ Document Verification Rejected`;
+        htmlMessage = `
+          <p>Hello ${name},</p>
+          <p>Your document <b>${docName}</b> has been <strong style="color:red;">rejected</strong> after final review.</p>
+          <p><b>Reason:</b> ${remarks || 'No reason provided.'}</p>
+          <br/>
+          <p>Please review your document and resubmit for verification.</p>
+          <br/>
+          <p>Regards,<br/>Super Admin Team</p>
+        `;
       }
 
-      showNotification(`Document ${finalStatus.toLowerCase()} completed.`, 'success');
+      if (email && email.includes('@')) {
+        await sendNotification(email, subject, htmlMessage, token);
+        console.log('📧 Notification sent to:', email);
+      } else {
+        showNotification('No valid email found; email not sent.', 'warning');
+      }
+
+      showNotification(`Document ${finalStatus} successfully.`, 'success');
       setDialogOpen(false);
       fetchVerificationQueue();
     } catch (error) {
@@ -146,13 +146,12 @@ const message =
     setDialogOpen(true);
   };
 
-  if (isLoading) {
+  if (isLoading)
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
         <CircularProgress />
       </Box>
     );
-  }
 
   return (
     <>
@@ -187,7 +186,6 @@ const message =
                       <TableCell>{new Date(doc.uploadedAt).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <Tooltip title="Final Review">
-                          {/* wrap in span to avoid MUI disabled-child tooltip issues */}
                           <span>
                             <Button
                               variant="contained"
@@ -264,16 +262,14 @@ const message =
 
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)} variant="outlined">Cancel</Button>
-          <span>
-            <Button
-              onClick={handleFinalVerification}
-              variant="contained"
-              color={finalStatus === 'Rejected' ? 'error' : 'success'}
-              disabled={isSubmitting || (finalStatus === 'Rejected' && remarks.length < 5)}
-            >
-              {isSubmitting ? <CircularProgress size={24} color="inherit" /> : `Confirm ${finalStatus}`}
-            </Button>
-          </span>
+          <Button
+            onClick={handleFinalVerification}
+            variant="contained"
+            color={finalStatus === 'Rejected' ? 'error' : 'success'}
+            disabled={isSubmitting || (finalStatus === 'Rejected' && remarks.length < 5)}
+          >
+            {isSubmitting ? <CircularProgress size={24} color="inherit" /> : `Confirm ${finalStatus}`}
+          </Button>
         </DialogActions>
       </Dialog>
     </>
@@ -281,3 +277,4 @@ const message =
 };
 
 export default FinalVerificationQueue;
+
