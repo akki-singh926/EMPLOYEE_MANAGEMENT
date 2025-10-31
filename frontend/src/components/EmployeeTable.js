@@ -1,61 +1,126 @@
-// src/components/EmployeeTable.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Chip
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Paper, Button, Chip, CircularProgress, Typography, Box
 } from '@mui/material';
-
-// --- Mock Data ---
-// In a real app, this data would come from a backend API call.
-const mockEmployees = [
-  { id: 1, name: 'John Doe', employeeId: 'EMP101', email: 'john.d@example.com', department: 'Technology', status: 'Active' },
-  { id: 2, name: 'Jane Smith', employeeId: 'EMP102', email: 'jane.s@example.com', department: 'HR', status: 'Active' },
-  { id: 3, name: 'Peter Jones', employeeId: 'EMP103', email: 'peter.j@example.com', department: 'Finance', status: 'Inactive' },
-  { id: 4, name: 'Mary Garcia', employeeId: 'EMP104', email: 'mary.g@example.com', department: 'Marketing', status: 'Active' },
-];
+import axios from 'axios';
 
 const EmployeeTable = () => {
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // ✅ Fetch employee list from backend (HR route)
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error("No auth token found.");
+
+      const response = await axios.get('http://localhost:8080/api/hr/employees', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // ✅ Match backend structure (response.data.data)
+      setEmployees(response.data.data || []);
+      setError(null);
+    } catch (err) {
+      console.error("Failed to fetch employees:", err);
+      setError("Failed to load employee data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
   const handleView = (id) => {
-    console.log('View employee with ID:', id);
-    alert(`Viewing details for employee ${id}`);
+    alert(`Viewing details for employee ID: ${id}`);
   };
 
   const handleEdit = (id) => {
-    console.log('Edit employee with ID:', id);
-    alert(`Editing details for employee ${id}`);
+    alert(`Editing details for employee ID: ${id}`);
   };
 
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading employees...</Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ textAlign: 'center', p: 2 }}>
+        <Typography color="error">{error}</Typography>
+        <Button onClick={fetchEmployees} variant="outlined" sx={{ mt: 1 }}>
+          Retry
+        </Button>
+      </Box>
+    );
+  }
+
+  if (employees.length === 0) {
+    return (
+      <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+        No employees found.
+      </Typography>
+    );
+  }
+
   return (
-    <TableContainer component={Paper}>
+    <TableContainer component={Paper} elevation={3}>
       <Table sx={{ minWidth: 650 }} aria-label="employee table">
         <TableHead>
           <TableRow>
-            <TableCell>Name</TableCell>
-            <TableCell>Employee ID</TableCell>
-            <TableCell>Email</TableCell>
-            <TableCell>Department</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell align="right">Actions</TableCell>
+            <TableCell><strong>Name</strong></TableCell>
+            <TableCell><strong>Employee ID</strong></TableCell>
+            <TableCell><strong>Email</strong></TableCell>
+            <TableCell><strong>Department</strong></TableCell>
+            <TableCell><strong>Status</strong></TableCell>
+            <TableCell align="right"><strong>Actions</strong></TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {mockEmployees.map((employee) => (
-            <TableRow key={employee.id}>
-              <TableCell component="th" scope="row">{employee.name}</TableCell>
-              <TableCell>{employee.employeeId}</TableCell>
-              <TableCell>{employee.email}</TableCell>
-              <TableCell>{employee.department}</TableCell>
+          {employees.map((employee) => (
+            <TableRow key={employee._id || employee.id}>
+              <TableCell>{employee.name || 'N/A'}</TableCell>
+              <TableCell>{employee.employeeId || 'N/A'}</TableCell>
+              <TableCell>{employee.email || 'N/A'}</TableCell>
+              <TableCell>{employee.department || 'N/A'}</TableCell>
               <TableCell>
-                <Chip 
-                  label={employee.status} 
-                  color={employee.status === 'Active' ? 'success' : 'default'} 
-                  size="small" 
+                <Chip
+                  label={employee.status || 'Not Uploaded'}
+                  color={
+                    employee.status === 'Approved'
+                      ? 'success'
+                      : employee.status === 'Pending'
+                      ? 'warning'
+                      : employee.status === 'Rejected'
+                      ? 'error'
+                      : 'default'
+                  }
+                  size="small"
                 />
               </TableCell>
               <TableCell align="right">
-                <Button variant="outlined" size="small" onClick={() => handleView(employee.id)} sx={{ mr: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => handleView(employee._id || employee.id)}
+                  sx={{ mr: 1 }}
+                >
                   View
                 </Button>
-                <Button variant="contained" size="small" onClick={() => handleEdit(employee.id)}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => handleEdit(employee._id || employee.id)}
+                >
                   Edit
                 </Button>
               </TableCell>
