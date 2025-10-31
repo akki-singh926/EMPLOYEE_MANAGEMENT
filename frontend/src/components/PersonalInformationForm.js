@@ -3,15 +3,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Box, TextField, Button, Grid, Typography, CircularProgress } from '@mui/material';
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../context/AuthContext';
 
 // --- Temporary Mock Data (for fallback when backend fails) ---
 const MOCK_DATA = {
   name: 'Test Employee Name',
-  dob: '1990-01-01', // YYYY-MM-DD
+  dob: '1990-01-01',
   phone: '9876543210',
   address: '456 Test Street, Mock City',
-  emergencyContact: '0123456789', 
+  emergencyContact: '0123456789',
   designation: 'N/A',
   department: 'N/A',
   reportingManager: 'N/A',
@@ -26,31 +26,28 @@ const PersonalInformationForm = ({ onUpdateSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastApprovedData, setLastApprovedData] = useState(null);
 
-  // --- Helper: Normalize phone number to E.164 format ---
+  // --- Helper: Normalize phone number ---
   const normalizePhone = (num) => {
     if (!num) return '';
     const trimmed = num.trim();
-    // If already starts with +, keep it
-    if (trimmed.startsWith('+')) return trimmed;
-    // Otherwise, add +91 (default for India)
-    return `+91${trimmed}`;
+    return trimmed.startsWith('+') ? trimmed : `+91${trimmed}`;
   };
 
-  // --- 1. FETCH PROFILE DATA ON LOAD ---
+  // --- 1. FETCH PROFILE DATA ---
   const fetchProfile = useCallback(async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      if (!token) throw new Error("No auth token found.");
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('No auth token found.');
 
       const response = await axios.get('http://localhost:8080/api/employee/me', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const userData = response.data.data || response.data;
 
       const fetchedState = {
         name: userData.name || '',
-        dob: userData.dob ? userData.dob.substring(0, 10) : '', // format: YYYY-MM-DD
+        dob: userData.dob ? userData.dob.substring(0, 10) : '',
         phone: userData.phone || '',
         address: userData.address || '',
         emergencyContact: userData.emergencyContact || '',
@@ -61,7 +58,6 @@ const PersonalInformationForm = ({ onUpdateSuccess }) => {
 
       setFormData(fetchedState);
       setLastApprovedData(fetchedState);
-
     } catch (error) {
       console.error('Error fetching profile (using mock data):', error.message);
       setFormData(MOCK_DATA);
@@ -84,20 +80,19 @@ const PersonalInformationForm = ({ onUpdateSuccess }) => {
     }));
   };
 
-  // --- 2. SUBMIT PROFILE UPDATE ---
+  // --- 2. SUBMIT PROFILE UPDATE (now sends update request for HR approval) ---
   const handleSubmit = async (event) => {
     event.preventDefault();
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem("authToken");
-      if (!token) throw new Error("No auth token found.");
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('No auth token found.');
 
-      // --- Payload creation ---
       const payload = {
         name: formData.name?.trim() || '',
-        dob: formData.dob ? formData.dob : '', // backend expects ISO8601 format
-        phone: normalizePhone(formData.phone), // convert to +91 format if needed
+        dob: formData.dob ? formData.dob : '',
+        phone: normalizePhone(formData.phone),
         address: formData.address?.trim() || '',
         emergencyContact: formData.emergencyContact?.trim() || '',
         designation: formData.designation?.trim() || 'N/A',
@@ -105,27 +100,29 @@ const PersonalInformationForm = ({ onUpdateSuccess }) => {
         reportingManager: formData.reportingManager?.trim() || 'N/A',
       };
 
-      console.log("Payload being sent:", payload); // Debugging helper
+      console.log('Payload being sent:', payload);
 
-      await axios.put('http://localhost:8080/api/employee/me', payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // ✅ updated backend endpoint for HR review workflow
+      const response = await axios.post(
+        'http://localhost:8080/api/employee/me/update-request',
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      showNotification('Information submitted for HR review!', 'warning');
-      setFormData(lastApprovedData); // revert to last approved after submission
+      showNotification(response.data.message || 'Information submitted for HR review!', 'success');
+      setLastApprovedData(formData);
 
       if (onUpdateSuccess) onUpdateSuccess();
-
     } catch (error) {
-      console.error('Error updating profile:', error);
-      const errorMsg = error.response?.data?.errors?.[0]?.msg || error.response?.data?.message;
-      showNotification(`Failed to submit: ${errorMsg || 'Check required fields.'}`, 'error');
+      console.error('Error sending update request:', error);
+      const errorMsg = error.response?.data?.message || 'Check required fields or contact admin.';
+      showNotification(`Failed to send update request: ${errorMsg}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // --- 3. LOADING SPINNER ---
+  // --- 3. LOADING STATE ---
   if (isLoading || !formData) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
