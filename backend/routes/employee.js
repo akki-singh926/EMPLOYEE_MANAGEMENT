@@ -6,6 +6,9 @@ const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const path = require('path');
 const logAction = require('../utils/logAction');
+const crypto = require('crypto');
+const fs = require('fs');
+
 
 // ----------------------
 // GET employee profile
@@ -132,30 +135,59 @@ router.put('/me', protect, [
 // DOCUMENT UPLOAD
 // ----------------------
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.resolve('./uploads')),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+  destination: (req, file, cb) => {
+    const userFolder = path.join(__dirname, `../uploads/${req.user._id}`);
+
+    if (!fs.existsSync(userFolder)) {
+      fs.mkdirSync(userFolder, { recursive: true });
+    }
+
+    cb(null, userFolder);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const safeName = crypto.randomBytes(8).toString('hex') + ext;
+    cb(null, safeName);
+  }
 });
-const upload = multer({ storage });
+
+// File filter
+function fileFilter (req, file, cb) {
+  const allowed = ["image/png", "image/jpeg", "application/pdf"];
+  if (!allowed.includes(file.mimetype)) {
+    return cb(new Error("Invalid file type"), false);
+  }
+  cb(null, true);
+}
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 } // 2 MB
+});
 
 router.post('/upload', protect, upload.single('document'), async (req, res) => {
-  const { type } = req.body; // Aadhaar, PAN, etc.
-  if (!type) return res.status(400).json({ message: 'Document type required' });
-
   try {
+    const { type } = req.body;
+    if (!type) return res.status(400).json({ message: 'Document type required' });
+
     req.user.documents.push({
       name: type,
-      filename: req.file.filename,
+      filePath: `/uploads/${req.user._id}/${req.file.filename}`,
       mimetype: req.file.mimetype,
       size: req.file.size,
       status: 'Pending'
     });
+
     await req.user.save();
-    res.json({ success: true, message: 'Document uploaded', document: req.user.documents.slice(-1)[0] });
+
+    res.json({ success: true, message: 'Document uploaded successfully' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 // ----------------------
 // GET employee documents

@@ -6,6 +6,18 @@ const sendEmail = require('../utils/email');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const logAction = require('../utils/logAction');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+const {parse }= require('csv-parse/sync');
+const bcrypt = require('bcryptjs');
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, path.resolve('./uploads')),
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+
 
 // =====================================================
 // 1️⃣  Get all employees (Admin view)
@@ -336,9 +348,158 @@ router.get('/audit', protect, authorizeRoles('superAdmin', 'admin'), async (req,
   }
 });
 
+// POST /api/superadmin/employees/bulk-upload
+router.post('/employees/bulk-upload', protect, authorizeRoles('superAdmin','admin','hr'), upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'File is required (CSV or XLSX)' });
+
+    const ext = path.extname(req.file.filename).toLowerCase();
+    let rows = [];
+
+    // 1) CSV
+    if (ext === '.csv') {
+      const content = fs.readFileSync(req.file.path, 'utf8');
+      // parse CSV synchronously (assumes header row)
+      const records = parse(content, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true
+      });
+      rows = records;
+    }
+    // 2) XLSX/XLS
+    else if (ext === '.xlsx' || ext === '.xls') {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(req.file.path);
+      const worksheet = workbook.worksheets[0]; // first sheet
+      const headerRow = worksheet.getRow(1).values; // array with first cell blank so be careful
+      const headers = headerRow.slice(1).map(h => String(h).trim());
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // skip header
+        const values = row.values.slice(1);
+        const obj = {};
+        headers.forEach((h, idx) => {
+          obj[h] = values[idx] !== undefined && values[idx] !== null ? String(values[idx]).trim() : '';
+        });
+        rows.push(obj);
+      });
+    } else {
+      // cleanup file
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ message: 'Unsupported file format. Use CSV or XLSX.' });
+    }
+
+    // Process rows
+    const results = {
+      created: [],
+      failed: [],
+      errors: []
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      // normalize keys to expected lowercase names
+      // Accept columns like employeeId, email, name, password, role, department, designation, phone, address
+      const employeeId = (row.employeeId || row.employee_id || row.EmployeeId || '').trim();
+      const email = (row.email || row.Email || '').trim().toLowerCase();
+      const name = (row.name || row.Name || '').trim();
+      const passwordRaw = row.password || row.Password || '';
+      const role = (row.role || 'employee').trim() || 'employee';
+      const department = row.department || row.Department || '';
+      const designation = row.designation || row.Designation || '';
+      const phone = row.phone || row.Phone || '';
+      const address = row.address || row.Address || '';
+
+      const rowIdentifier = `row:${i+1} (employeeId:${employeeId || 'N/A'}, email:${email || 'N/A'})`;
+
+      // Basic validation
+      if (!employeeId) {
+        results.failed.push(rowIdentifier);
+        results.errors.push({ row: i+1, error: 'employeeId is required' });
+        continue;
+      }
+      if (!email) {
+        results.failed.push(rowIdentifier);
+        results.errors.push({ row: i+1, error: 'email is required' });
+        continue;
+      }
+      if (!name) {
+        results.failed.push(rowIdentifier);
+        results.errors.push({ row: i+1, error: 'name is required' });
+        continue;
+      }
+      // email basic format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        results.failed.push(rowIdentifier);
+        results.errors.push({ row: i+1, error: 'invalid email format' });
+        continue;
+      }
+
+      // Check duplicates in DB
+      const exists = await User.findOne({ $or: [{ email }, { employeeId }] }).lean();
+      if (exists) {
+        results.failed.push(rowIdentifier);
+        results.errors.push({ row: i+1, error: 'email or employeeId already exists' });
+        continue;
+      }
+
+      // prepare password
+      const password = passwordRaw && passwordRaw.length >= 6 ? passwordRaw : (process.env.DEFAULT_bulk_PASSWORD || 'Password@123');
+
+      const salt = await bcrypt.genSalt(10);
+      const hashed = await bcrypt.hash(password, salt);
+
+      // create user
+      try {
+        const u = await User.create({
+          employeeId,
+          email,
+          name,
+          password: hashed,
+          role,
+          department,
+          designation,
+          phone,
+          address
+        });
+
+        // optional: audit log
+        await logAction({
+          req,
+          actor: req.user,
+          action: 'USER_CREATED_BULK',
+          targetType: 'User',
+          targetId: u._id,
+          details: { employeeId: u.employeeId, email: u.email }
+        });
+
+        results.created.push({ id: u._id.toString(), employeeId, email });
+      } catch (e) {
+        results.failed.push(rowIdentifier);
+        results.errors.push({ row: i+1, error: e.message || 'create_failed' });
+      }
+    }
+
+    // cleanup uploaded file after processing
+    try { fs.unlinkSync(req.file.path); } catch(e) { /* ignore */ }
+
+    return res.json({
+      success: true,
+      createdCount: results.created.length,
+      failedCount: results.failed.length,
+      created: results.created,
+      errors: results.errors
+    });
+  } catch (err) {
+    console.error('bulk-upload error', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
 
 module.exports = router;
-
 
 
 
