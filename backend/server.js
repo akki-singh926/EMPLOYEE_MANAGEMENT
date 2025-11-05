@@ -16,6 +16,8 @@ const app = express();
 
 
 
+
+
 // middlewares
 //app.use(helmet());
 app.use(cors());
@@ -61,5 +63,11 @@ app.use('/api/admin', hrRoutes);
 //superAdmin
 const superAdmin=require('./routes/superAdmin');
 app.use('/api/superAdmin',superAdmin);
+//Attendanace
+const attendanceRoutes = require('./routes/attendance');
+app.use('/api/attendance', attendanceRoutes);
+
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+require('./utils/scheduler');
