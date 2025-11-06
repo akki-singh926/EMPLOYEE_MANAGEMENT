@@ -1,149 +1,131 @@
 // src/components/DocumentVerificationList.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Typography, List, ListItem, ListItemText, Button, Card, CardContent,
-  CircularProgress, IconButton, Tooltip
+  Box,
+  Typography,
+  List,
+  ListItem,
+  ListItemText,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Chip
 } from '@mui/material';
-import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../context/NotificationContext';
 
-const API_URL = 'http://localhost:8080/api/hr/documents'; 
-const BACKEND_HOST = 'http://localhost:8080';
-const UPLOADS_PATH = '/uploads';
+const API_URL = 'http://localhost:8080/api/hr/employees';
 
 const DocumentVerificationList = () => {
-  const [pendingDocuments, setPendingDocuments] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const { showNotification } = useNotification();
+  const navigate = useNavigate();
 
-  const fetchPendingDocuments = useCallback(async () => {
+  // ✅ Fetch all employees (backend gives document status)
+  const fetchEmployees = useCallback(async () => {
     setIsLoading(true);
     const token = localStorage.getItem('authToken');
-    
+
     if (!token) {
-      showNotification("Session expired. Please log in again.", 'error');
+      showNotification('Session expired. Please log in again.', 'error');
       setIsLoading(false);
       return;
     }
 
     try {
-      const response = await axios.get(`${API_URL}/pending`, {
+      const response = await axios.get(API_URL, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      const docs = response.data.documents || [];
-      const uniqueDocuments = Array.from(new Map(docs.map(d => [d._id, d])).values());
-      
-      uniqueDocuments.forEach(doc => {
-        doc.fileUrl = doc.filename ? `${BACKEND_HOST}${UPLOADS_PATH}/${doc.filename}` : '#';
+      // ✅ Fix: backend sends { success: true, data: employeesWithStatus }
+      const allEmployees = response.data.data || [];
+
+      // ✅ Normalize case sensitivity just in case
+      const filtered = allEmployees.filter(emp => {
+        const status = emp.status?.toLowerCase();
+        return status === 'pending' || status === 'rejected';
       });
 
-      setPendingDocuments(uniqueDocuments);
-
+      setEmployees(filtered);
     } catch (error) {
-      console.error('Error fetching pending documents:', error);
-      showNotification("Failed to load documents for verification.", 'error');
+      console.error('Error fetching employees:', error);
+      showNotification('Failed to load employee list.', 'error');
     } finally {
       setIsLoading(false);
     }
   }, [showNotification]);
 
   useEffect(() => {
-    fetchPendingDocuments();
-  }, [fetchPendingDocuments]);
+    fetchEmployees();
+  }, [fetchEmployees]);
 
-  const updateDocumentStatus = async (doc, newStatus) => {
-    const remarks = newStatus === 'Rejected' ? prompt("Please provide a reason for rejection:") : '';
-    if (newStatus === 'Rejected' && !remarks) return;
-
-    const token = localStorage.getItem('authToken');
-    
-    try {
-      await axios.patch(`${API_URL}/${doc.employeeId}/${doc._id}`, 
-        { status: newStatus, remarks }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      showNotification(`Document for ${doc.userName} was ${newStatus.toLowerCase()}!`, 'success');
-
-      // 🔔 Notification to employee
-      showNotification(
-        `Notification sent to ${doc.userName || doc.employeeId}: Your document '${doc.name}' was ${newStatus.toLowerCase()}.`,
-        'info'
-      );
-
-      setPendingDocuments(prev => prev.filter(item => item._id !== doc._id));
-
-    } catch (error) {
-      console.error(`Failed to ${newStatus} document:`, error);
-      showNotification(`Failed to process verification.`, 'error');
-    }
+  // ✅ Navigate to detail view (opens HR verify page)
+  const handleViewDocuments = (employeeId) => {
+    if (!employeeId) return showNotification('Employee ID missing.', 'error');
+    navigate(`/admin/verify/${employeeId}`);
   };
 
+  // ✅ Loading state
   if (isLoading) {
-    return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
-  if (pendingDocuments.length === 0) {
+  // ✅ No pending/rejected employees
+  if (employees.length === 0) {
     return (
       <Typography variant="body1" sx={{ p: 3, textAlign: 'center' }}>
-        ✅ All documents are up to date! Nothing pending verification.
+        ✅ All documents are verified! No pending approvals.
       </Typography>
     );
   }
 
+  // ✅ Render employee list
   return (
-    <Card sx={{ mt: 2 }}>
+    <Card sx={{ mt: 2, borderRadius: 2, boxShadow: 2 }}>
       <CardContent sx={{ p: 0 }}>
+        <Typography variant="h6" sx={{ p: 2, fontWeight: 600 }}>
+          Employees with Pending/Rejected Documents
+        </Typography>
+
         <List>
-          {pendingDocuments.map((doc) => (
+          {employees.map((emp) => (
             <ListItem
-              key={doc._id}
+              key={emp._id}
               divider
               secondaryAction={
-                <Box>
-                  <Button 
-                    variant="contained" 
-                    color="success" 
-                    size="small" 
-                    sx={{ mr: 1 }} 
-                    onClick={() => updateDocumentStatus(doc, 'Approved')}
-                    startIcon={<CheckIcon />}
-                  >
-                    Approve
-                  </Button>
-                  <Button 
-                    variant="contained" 
-                    color="error" 
-                    size="small" 
-                    onClick={() => updateDocumentStatus(doc, 'Rejected')}
-                    startIcon={<CloseIcon />}
-                  >
-                    Reject
-                  </Button>
-                </Box>
+                <Button
+                  variant="outlined"
+                  startIcon={<VisibilityIcon />}
+                  onClick={() => handleViewDocuments(emp.employeeId)}
+                >
+                  View Docs
+                </Button>
               }
             >
               <ListItemText
-                primary={`${doc.userName || doc.employeeId} - ${doc.name}`}
+                primary={`${emp.name || 'Unnamed Employee'} (${emp.employeeId})`}
                 secondary={
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    Status: {doc.status}
-                    <Tooltip title="View Document">
-                      <IconButton 
-                        size="small" 
-                        href={doc.fileUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        sx={{ ml: 1 }}
-                        disabled={doc.fileUrl === '#'}
-                      >
-                        <VisibilityIcon fontSize="small" color="primary" />
-                      </IconButton>
-                    </Tooltip>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2">Status:</Typography>
+                    <Chip
+                      label={emp.status || 'Unknown'}
+                      color={
+                        emp.status === 'Approved'
+                          ? 'success'
+                          : emp.status === 'Rejected'
+                          ? 'error'
+                          : 'warning'
+                      }
+                      size="small"
+                    />
                   </Box>
                 }
               />

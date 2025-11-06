@@ -25,14 +25,14 @@ import SecurityIcon from '@mui/icons-material/Security';
 import SpeedIcon from '@mui/icons-material/Speed';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'; // <-- NEW IMPORT
-import DescriptionIcon from '@mui/icons-material/Description'; // <-- NEW IMPORT
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'; 
+import DescriptionIcon from '@mui/icons-material/Description'; 
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
 import UserFormModal from '../components/UserFormModal';
-import { useAuth } from '../context/AuthContext'; // CORRECTED PATH
+import { useAuth } from '../context/AuthContext'; 
 import FinalVerificationQueue from '../components/FinalVerificationQueue';
-
+import BulkEmployeeUpload from '../components/BulkEmployeeUpload'; 
 // --- PEGORION BRANDING COLORS (FLAT, CRISP) ---
 const PRIMARY_COLOR = '#5A45FF';      // Pegorion Primary Blue-Purple
 const SECONDARY_COLOR = '#8B5CF6';    // Pegorion Lighter Purple Accent
@@ -516,12 +516,18 @@ const SuperAdminPage = () => {
 
               </Grid>
             </Grid>
-          </Paper>
+               // ...
+          </Paper>
 
-          {/* Final Verification Queue */}
-          <Box sx={{ mb: 4 }}>
-            <FinalVerificationQueue />
-          </Box>
+          {/* === NEW BULK UPLOAD SECTION === */}
+          <Box sx={{ my: 4 }}> {/* Using 'my' gives it margin top and bottom */}
+            <BulkEmployeeUpload />
+          </Box>
+
+          {/* Final Verification Queue */}
+  <Box sx={{ mb: 4 }}>
+ <FinalVerificationQueue /> </Box>
+
 
           {/* User Data Table - Clean and Crisp */}
           <TableContainer 

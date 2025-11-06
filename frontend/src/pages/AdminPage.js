@@ -1,4 +1,3 @@
-// src/pages/AdminPage.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Box, Typography, Container, Button, AppBar, Toolbar, 
@@ -31,33 +30,34 @@ import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
 import UserFormModal from '../components/UserFormModal';
 import { useAuth } from '../context/AuthContext';
+import AttendanceManager from '../components/AttendanceManager';
 
 // --- PEGORION BRANDING COLORS ---
-const PRIMARY_COLOR = '#5A45FF'; // Pegorion Primary Blue-Purple
-const SECONDARY_COLOR = '#8B5CF6'; // Pegorion Lighter Purple Accent
+const PRIMARY_COLOR = '#5A45FF';
+const SECONDARY_COLOR = '#8B5CF6';
 const TEXT_COLOR = '#1F2937';
 const LIGHT_BACKGROUND = '#F9FAFB';
 
-// Role Color Mapping for Chips (using brand colors and standard alerts)
+// Role Color Mapping for Chips
 const getRoleChipStyle = (role) => {
   switch (role) {
     case 'superadmin': return { background: PRIMARY_COLOR, color: 'white' };
     case 'admin': return { background: SECONDARY_COLOR, color: 'white' };
-    case 'hr': return { background: '#F59E0B', color: 'white' }; // Amber for HR
-    default: return { background: '#6B7280', color: 'white' }; // Gray for Employee
+    case 'hr': return { background: '#F59E0B', color: 'white' };
+    default: return { background: '#6B7280', color: 'white' };
   }
 };
 
 // Document Status Color Mapping
 const getStatusChipStyle = (status) => {
-    switch (status) {
-        case 'Final Verification Completed': return { background: '#10B981', color: 'white' }; // Green
-        case 'Not Uploaded': return { background: '#6B7280', color: 'white' }; // Gray
-        case 'Rejected': return { background: '#EF4444', color: 'white' }; // Red
-        case 'Pending': 
-        case 'Approved':
-        default: return { background: '#F59E0B', color: 'white' }; // Amber/Yellow
-    }
+  switch (status) {
+    case 'Final Verification Completed': return { background: '#10B981', color: 'white' };
+    case 'Not Uploaded': return { background: '#6B7280', color: 'white' };
+    case 'Rejected': return { background: '#EF4444', color: 'white' };
+    case 'Pending': 
+    case 'Approved':
+    default: return { background: '#F59E0B', color: 'white' };
+  }
 };
 
 const AdminPage = () => {
@@ -71,26 +71,28 @@ const AdminPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
-  // --- NEW STATE FOR PENDING UPDATES ---
+  // Pending Updates State
   const [pendingUpdates, setPendingUpdates] = useState([]);
   const [remarks, setRemarks] = useState({});
   const [isPendingLoading, setIsPendingLoading] = useState(true);
-  // ----------------------------------------
+
+  // Export State
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportAnchorEl, setExportAnchorEl] = useState(null);
+  const isExportMenuOpen = Boolean(exportAnchorEl);
 
   const hasSuperAdminRights = user?.role === 'superadmin';
   const token = localStorage.getItem('authToken');
 
-  // --- STATISTICS LOGIC ---
+  // Statistics Logic
   const getStatistics = useCallback(() => {
     const total = employees.length;
     
-    // Count verified: all documents verified
     const verified = employees.filter(emp => 
       emp.documents?.length > 0 && 
       emp.documents.every(d => d.status === 'Verified')
     ).length;
     
-    // Count pending: no documents OR has documents but not all verified
     const pendingDocs = employees.filter(emp => 
       !emp.documents || 
       emp.documents.length === 0 || 
@@ -110,8 +112,7 @@ const AdminPage = () => {
   
   const stats = getStatistics();
 
-
-  // --- Send OTP ---
+  // Send OTP
   const handleSendOTP = async (employeeEmail, employeeName) => {
     if (!window.confirm(`Send OTP to ${employeeName} (${employeeEmail})?`)) return;
     try {
@@ -126,7 +127,7 @@ const AdminPage = () => {
     }
   };
 
-  // --- Fetch Employees ---
+  // Fetch Employees
   const fetchEmployees = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -145,7 +146,7 @@ const AdminPage = () => {
     }
   }, [showNotification, token]);
 
-  // --- NEW: Fetch Pending Updates ---
+  // Fetch Pending Updates
   const fetchPendingUpdates = useCallback(async () => {
     setIsPendingLoading(true);
     try {
@@ -154,10 +155,7 @@ const AdminPage = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       
-      // ✅ --- THIS IS THE FIX ---
-      // Backend sends { items: [...] }, not { pending: [...] }
       setPendingUpdates(res.data.items || []);
-      // -------------------------
 
     } catch (err) {
       console.error('Failed to load pending updates:', err);
@@ -166,14 +164,13 @@ const AdminPage = () => {
       setIsPendingLoading(false);
     }
   }, [showNotification, token]);
-  // ----------------------------------
 
   useEffect(() => {
     fetchEmployees();
-    fetchPendingUpdates(); // <-- Fetch both on load
+    fetchPendingUpdates();
   }, [fetchEmployees, fetchPendingUpdates]);
 
-  // --- Delete User ---
+  // Delete User
   const handleDeleteUser = async (userId, userName, userRole) => {
     if (userRole === 'superadmin' && !hasSuperAdminRights) {
       return showNotification("Only Superadmin can delete other Superadmins.", 'error');
@@ -190,13 +187,13 @@ const AdminPage = () => {
     }
   };
 
-  // --- NEW: Handle Approve/Reject Update ---
+  // Handle Approve/Reject Update
   const handleUpdateAction = async (userId, actionType) => {
     try {
       await axios.patch(
         `http://localhost:8080/api/hr/pending-updates/${userId}`,
         {
-          action: actionType, // "approve" or "reject"
+          action: actionType,
           remarks: remarks[userId] || '',
         },
         {
@@ -204,10 +201,9 @@ const AdminPage = () => {
         }
       );
       showNotification(`Profile ${actionType}ed successfully!`, 'success');
-      fetchPendingUpdates(); // refresh pending list
-      fetchEmployees(); // refresh main employee list (in case data changed)
+      fetchPendingUpdates();
+      fetchEmployees();
       
-      // Clear the remark for the processed user
       setRemarks(prev => {
         const newRemarks = { ...prev };
         delete newRemarks[userId];
@@ -218,13 +214,8 @@ const AdminPage = () => {
       showNotification('Failed to update profile status.', 'error');
     }
   };
-  // ----------------------------------------
 
-  // --- EXPORT LOGIC ---
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportAnchorEl, setExportAnchorEl] = useState(null);
-  const isExportMenuOpen = Boolean(exportAnchorEl);
-
+  // Export Menu Handlers
   const handleExportMenuOpen = (event) => {
     setExportAnchorEl(event.currentTarget);
   };
@@ -267,8 +258,6 @@ const AdminPage = () => {
       setIsExporting(false);
     }
   };
-  // --- END EXPORT LOGIC ---
-
 
   const getDisplayStatus = (documents) => {
     if (!documents || documents.length === 0) return 'Not Uploaded';
@@ -380,47 +369,45 @@ const AdminPage = () => {
           </Alert>
         </Box>
 
-        {/* --- UPDATED Statistics Cards --- */}
+        {/* Statistics Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           {[
             { title: 'Total Employees', value: stats.total, icon: PeopleIcon, color: PRIMARY_COLOR },
-            { title: 'Verified Documents', value: stats.verified, icon: VerifiedUserIcon, color: '#10B981' }, // Green
-            { title: 'Pending Documents', value: stats.pendingDocs, icon: HourglassEmptyIcon, color: '#F59E0B' }, // Amber
-            // --- NEW STAT CARD ---
-            { title: 'Pending Profile Updates', value: pendingUpdates.length, icon: HistoryToggleOffIcon, color: '#F59E0B' }, // Amber
+            { title: 'Verified Documents', value: stats.verified, icon: VerifiedUserIcon, color: '#10B981' },
+            { title: 'Pending Documents', value: stats.pendingDocs, icon: HourglassEmptyIcon, color: '#F59E0B' },
+            { title: 'Pending Profile Updates', value: pendingUpdates.length, icon: HistoryToggleOffIcon, color: '#F59E0B' },
             { title: 'Admin & HR Roles', value: stats.admins + stats.superAdmins, icon: SupervisorAccountIcon, color: SECONDARY_COLOR }
-          ].filter(item => item.value !== undefined) // Filter out any potential undefined values
-           .map((item, index) => (
-              <Grid item xs={12} sm={6} md={true} key={index} sx={{ flexGrow: 1 }}>
-                <Card elevation={4} sx={{ 
-                  borderRadius: '12px',
-                  bgcolor: 'white',
-                  borderLeft: `5px solid ${item.color}`,
-                  transition: 'all 0.3s ease',
-                  '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 10px 20px rgba(0,0,0,0.08)' }
-                }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#6B7280' }}>
-                        {item.title}
-                      </Typography>
-                      <item.icon sx={{ fontSize: 28, color: item.color }} />
-                    </Box>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: TEXT_COLOR }}>
-                      {item.value}
+          ].filter(item => item.value !== undefined).map((item, index) => (
+            <Grid item xs={12} sm={6} md={true} key={index} sx={{ flexGrow: 1 }}>
+              <Card elevation={4} sx={{ 
+                borderRadius: '12px',
+                bgcolor: 'white',
+                borderLeft: `5px solid ${item.color}`,
+                transition: 'all 0.3s ease',
+                '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 10px 20px rgba(0,0,0,0.08)' }
+              }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#6B7280' }}>
+                      {item.title}
                     </Typography>
-                    {item.title === 'Admin & HR Roles' && (
-                        <Typography variant="caption" sx={{ color: '#6B7280' }}>
-                            ({stats.admins} Admin/HR + {stats.superAdmins} Super)
-                        </Typography>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
+                    <item.icon sx={{ fontSize: 28, color: item.color }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: TEXT_COLOR }}>
+                    {item.value}
+                  </Typography>
+                  {item.title === 'Admin & HR Roles' && (
+                    <Typography variant="caption" sx={{ color: '#6B7280' }}>
+                      ({stats.admins} Admin/HR + {stats.superAdmins} Super)
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
           ))}
         </Grid>
         
-        {/* --- NEW: PENDING UPDATES TABLE SECTION --- */}
+        {/* Pending Updates Table Section */}
         {(isPendingLoading || pendingUpdates.length > 0) && (
           <Paper
             elevation={1}
@@ -428,7 +415,7 @@ const AdminPage = () => {
               mb: 4,
               borderRadius: '12px',
               border: '1px solid #E5E7EB',
-              overflow: 'hidden' // To contain the table
+              overflow: 'hidden'
             }}
           >
             <Box sx={{ p: 3 }}>
@@ -468,28 +455,28 @@ const AdminPage = () => {
                               variant="outlined"
                               value={remarks[item._id] || ''}
                               onChange={(e) =>
-                                setRemarks({ ...remarks, [item._id]: e.target.value }) // <-- 🚨 FIX WAS HERE
+                                setRemarks({ ...remarks, [item._id]: e.target.value })
                               }
                             />
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Button
+                              <Button
                                 variant="contained"
                                 color="success"
                                 size="small"
                                 onClick={() => handleUpdateAction(item._id, 'approve')}
-                                >
+                              >
                                 Approve
-                                </Button>
-                                <Button
+                              </Button>
+                              <Button
                                 variant="contained"
                                 color="error"
                                 size="small"
                                 onClick={() => handleUpdateAction(item._id, 'reject')}
-                                >
+                              >
                                 Reject
-                                </Button>
+                              </Button>
                             </Box>
                           </TableCell>
                         </TableRow>
@@ -499,13 +486,17 @@ const AdminPage = () => {
                 </TableContainer>
               )}
             </Box>
-          </Paper>
-        )}
-        {/* ------------------------------------------- */}
+          // ...
+          </Paper>
+        )}
+        {/* ------------------------------------------- */}
 
+        {/* --- ADD ATTENDANCE MANAGER HERE --- */}
+        <AttendanceManager />
 
-        {/* Search Bar & Actions */}
-        <Paper 
+        {/* Search Bar & Actions */}
+        <Paper 
+// ...
           elevation={1}
           sx={{ 
             mb: 4, 
@@ -607,12 +598,11 @@ const AdminPage = () => {
                   <ListItemText primary="Export as PDF (.pdf)" />
                 </MenuItem>
               </Menu>
-
             </Grid>
           </Grid>
         </Paper>
 
-        {/* --- Main Employee Table --- */}
+        {/* Main Employee Table */}
         <TableContainer 
           component={Paper} 
           elevation={1}

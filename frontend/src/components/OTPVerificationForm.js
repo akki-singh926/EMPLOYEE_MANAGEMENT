@@ -21,14 +21,14 @@ const OTPVerificationForm = ({ onVerificationSuccess, employeeEmail }) => {
     const token = localStorage.getItem('authToken');
 
     try {
-      // ✅ Backend endpoint for OTP verification
+      // ✅ Corrected: send only OTP (email not needed)
       await axios.post(
         'http://localhost:8080/api/hr/verify-otp',
-        { otp: otp.trim(), email: employeeEmail },
+        { otp: otp.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      showNotification('OTP verified successfully! Uploads unlocked.', 'success');
+      showNotification('✅ OTP verified successfully! Uploads unlocked.', 'success');
       onVerificationSuccess();
     } catch (error) {
       console.error('OTP verification failed:', error);
@@ -54,13 +54,13 @@ const OTPVerificationForm = ({ onVerificationSuccess, employeeEmail }) => {
       }}
     >
       <Typography variant="body2" sx={{ mb: 1 }}>
-        Enter the OTP sent by HR to enable uploads.
+        Enter the OTP sent by HR to your registered email to enable uploads.
       </Typography>
       <Box sx={{ display: 'flex', gap: 1 }}>
         <TextField
           label="6-Digit OTP"
           value={otp}
-          onChange={(e) => setOtp(e.target.value)}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} // only numbers
           inputProps={{ maxLength: 6 }}
           fullWidth
           required

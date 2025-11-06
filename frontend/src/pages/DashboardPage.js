@@ -24,7 +24,8 @@ import { useAuth } from '../context/AuthContext';
 import PersonalInformationForm from '../components/PersonalInformationForm';
 import DocumentManager from '../components/DocumentManager';
 import JobDetails from '../components/JobDetails';
-import NotificationBell from '../components/NotificationBell'; // <-- 1. IMPORT NOTIFICATION BELL
+import NotificationBell from '../components/NotificationBell';
+import AttendanceTracker from '../components/AttendanceTracker'; // <-- 1. NEW IMPORT
 import axios from 'axios';
 
 // --- PEGORION BRANDING COLORS ---
@@ -57,8 +58,8 @@ const DashboardPage = () => {
     switch (role) {
       case 'superadmin': return 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)'; // Deep Blue
       case 'admin': return 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)';     // Purple
-      case 'hr': return 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)';      // Red/Alert (distinguish from tech roles)
-      default: return 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)';        // Standard Blue
+      case 'hr': return 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)';     // Red/Alert (distinguish from tech roles)
+      default: return 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)';       // Standard Blue
     }
   };
 
@@ -262,6 +263,9 @@ const DashboardPage = () => {
             </Grid>
           </Grid>
         </Paper>
+
+        {/* --- 2. NEW ATTENDANCE COMPONENT --- */}
+        <AttendanceTracker />
 
         {/* Personal Info + Job Details */}
         <Grid container spacing={4} sx={{ mt: 3 }}>

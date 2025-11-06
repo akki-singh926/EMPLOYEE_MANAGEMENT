@@ -9,7 +9,7 @@ import {
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
-import { sendNotification } from '../api/Notification'; // path fixed to match file
+import { sendNotification } from '../api/Notification';
 
 const FinalVerificationQueue = () => {
   const [documents, setDocuments] = useState([]);
@@ -19,21 +19,21 @@ const FinalVerificationQueue = () => {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [finalStatus, setFinalStatus] = useState('Verified');
   const [remarks, setRemarks] = useState('');
-
   const [employeeMap, setEmployeeMap] = useState({});
+
   const { showNotification } = useNotification();
-
   const API_BASE_URL = 'http://localhost:8080/api/superAdmin';
-  const UPLOADS_PATH = 'http://localhost:8080/uploads';
+  const SERVER_BASE = 'http://localhost:8080'; // ✅ Added for clean file path usage
 
-  // --- Fetch Employees ---
+  // ✅ Fetch Employees
   const fetchEmployees = useCallback(async () => {
     const token = localStorage.getItem('authToken');
     if (!token) return;
     try {
       const res = await axios.get(`${API_BASE_URL}/employees`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
+
       const map = {};
       (res.data.employees || []).forEach(emp => {
         if (emp.employeeId) {
@@ -46,11 +46,12 @@ const FinalVerificationQueue = () => {
     }
   }, []);
 
-  // --- Fetch Docs ---
+  // ✅ Fetch Verified Documents (HR approved docs waiting for final review)
   const fetchVerificationQueue = useCallback(async () => {
     setIsLoading(true);
     const token = localStorage.getItem('authToken');
     if (!token) return setIsLoading(false);
+
     try {
       const response = await axios.get(`${API_BASE_URL}/verified-documents`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -69,10 +70,11 @@ const FinalVerificationQueue = () => {
     fetchVerificationQueue();
   }, [fetchEmployees, fetchVerificationQueue]);
 
+  // Helpers
   const lookupEmail = (id) => employeeMap[id]?.email || null;
   const lookupName = (id) => employeeMap[id]?.name || 'Employee';
 
-  // --- Handle Verification / Rejection ---
+  // ✅ Handle Final Verification / Rejection
   const handleFinalVerification = async () => {
     if (!selectedDoc) return;
     setIsSubmitting(true);
@@ -85,7 +87,6 @@ const FinalVerificationQueue = () => {
     }
 
     try {
-      // Update backend
       await axios.patch(
         `${API_BASE_URL}/documents/${selectedDoc.employeeId}/${selectedDoc._id}/verify`,
         { finalStatus, remarks },
@@ -96,39 +97,36 @@ const FinalVerificationQueue = () => {
       const name = lookupName(selectedDoc.employeeId);
       const docName = selectedDoc.name || 'document';
 
-      // ✅ Email formatting similar to backend style
+      // ✅ Smart email content based on status
       let subject, htmlMessage;
-
       if (finalStatus === 'Verified') {
         subject = `✅ Document Verified Successfully`;
         htmlMessage = `
           <p>Hello ${name},</p>
-          <p>Your submitted document <b>${docName}</b> has been <strong style="color:green;">verified</strong> by the Super Admin.</p>
+          <p>Your submitted document <b>${docName}</b> has been 
+          <strong style="color:green;">verified</strong> by the Super Admin.</p>
           <p>You may now proceed with the next steps in your profile or HR process.</p>
-          <br/>
-          <p>Regards,<br/>Super Admin Team</p>
-        `;
-      } else if (finalStatus === 'Rejected') {
+          <br/><p>Regards,<br/>Super Admin Team</p>`;
+      } else {
         subject = `❌ Document Verification Rejected`;
         htmlMessage = `
           <p>Hello ${name},</p>
-          <p>Your document <b>${docName}</b> has been <strong style="color:red;">rejected</strong> after final review.</p>
+          <p>Your document <b>${docName}</b> has been 
+          <strong style="color:red;">rejected</strong> after final review.</p>
           <p><b>Reason:</b> ${remarks || 'No reason provided.'}</p>
-          <br/>
-          <p>Please review your document and resubmit for verification.</p>
-          <br/>
-          <p>Regards,<br/>Super Admin Team</p>
-        `;
+          <br/><p>Please review your document and resubmit for verification.</p>
+          <br/><p>Regards,<br/>Super Admin Team</p>`;
       }
 
+      // ✅ Send email only if valid address
       if (email && email.includes('@')) {
         await sendNotification(email, subject, htmlMessage, token);
-        console.log('📧 Notification sent to:', email);
+        console.log('📧 Email sent to:', email);
       } else {
-        showNotification('No valid email found; email not sent.', 'warning');
+        showNotification('No valid email found. Notification not sent.', 'warning');
       }
 
-      showNotification(`Document ${finalStatus} successfully.`, 'success');
+      showNotification(`Document marked as ${finalStatus}.`, 'success');
       setDialogOpen(false);
       fetchVerificationQueue();
     } catch (error) {
@@ -144,6 +142,13 @@ const FinalVerificationQueue = () => {
     setFinalStatus('Verified');
     setRemarks('');
     setDialogOpen(true);
+  };
+
+  // ✅ Fixed: Proper preview path (no /backend prefix)
+  const getFileUrl = (filePath) => {
+    if (!filePath) return null;
+    if (filePath.startsWith('/uploads')) return `${SERVER_BASE}${filePath}`;
+    return `${SERVER_BASE}/uploads/${filePath}`;
   };
 
   if (isLoading)
@@ -168,7 +173,7 @@ const FinalVerificationQueue = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'background.default' }}>
-                    {['Employee ID', 'Name', 'HR Status', 'Date Uploaded', 'Actions'].map((head) => (
+                    {['Employee ID', 'Document', 'HR Status', 'Date Uploaded', 'Actions'].map((head) => (
                       <TableCell key={head} sx={{ fontWeight: 'bold' }}>
                         {head}
                       </TableCell>
@@ -181,9 +186,15 @@ const FinalVerificationQueue = () => {
                       <TableCell>{doc.employeeId}</TableCell>
                       <TableCell>{doc.name}</TableCell>
                       <TableCell>
-                        <Chip label={doc.status} color="success" size="small" />
+                        <Chip 
+                          label={doc.status} 
+                          color={doc.status === 'Approved' ? 'success' : 'warning'} 
+                          size="small" 
+                        />
                       </TableCell>
-                      <TableCell>{new Date(doc.uploadedAt).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : '—'}
+                      </TableCell>
                       <TableCell>
                         <Tooltip title="Final Review">
                           <span>
@@ -216,10 +227,10 @@ const FinalVerificationQueue = () => {
             {/* Left: Preview */}
             <Grid item xs={12} md={7}>
               <Typography variant="subtitle1" fontWeight={600}>File Preview</Typography>
-              {selectedDoc?.filename ? (
+              {selectedDoc?.filePath ? (
                 <Box sx={{ height: 400, border: '1px solid #ccc', mt: 1 }}>
                   <iframe
-                    src={`${UPLOADS_PATH}/${encodeURIComponent(selectedDoc.filename)}`}
+                    src={getFileUrl(selectedDoc.filePath)}
                     title={selectedDoc.name}
                     style={{ width: '100%', height: '100%', border: 'none' }}
                   />
@@ -227,14 +238,17 @@ const FinalVerificationQueue = () => {
               ) : (
                 <Alert severity="warning" sx={{ mt: 2 }}>No file available.</Alert>
               )}
-              <Link
-                href={`${UPLOADS_PATH}/${encodeURIComponent(selectedDoc?.filename)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{ mt: 2, display: 'block' }}
-              >
-                Open / Download File
-              </Link>
+
+              {selectedDoc?.filePath && (
+                <Link
+                  href={getFileUrl(selectedDoc.filePath)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{ mt: 2, display: 'block' }}
+                >
+                  Open / Download File
+                </Link>
+              )}
             </Grid>
 
             {/* Right: Verification Form */}
