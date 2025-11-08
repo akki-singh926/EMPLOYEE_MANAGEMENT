@@ -3,17 +3,19 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Typography, Button, Grid, Card, CardContent, CircularProgress,
   ListItem, ListItemText, Select, MenuItem, InputLabel, 
-  FormControl, TextField, Divider, Container, List, useTheme
+  FormControl, TextField, Divider, Container, List, useTheme, IconButton
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';  
 import CancelIcon from '@mui/icons-material/Cancel';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
+import DownloadIcon from '@mui/icons-material/Download';
 import { useNotification } from '../context/NotificationContext';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 
-const DOCS_ROUTE = 'http://localhost:8080/api/hr/documents';
+const API_BASE = 'http://localhost:8080';
+const DOCS_ROUTE = `${API_BASE}/api/hr/documents`;
 
 const DocumentVerificationPanel = () => {
   const { employeeId } = useParams(); 
@@ -29,7 +31,7 @@ const DocumentVerificationPanel = () => {
   const [currentDocName, setCurrentDocName] = useState('Select a Document');
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- Fetch documents for this employee
+  // ✅ Fetch documents for this employee
   const fetchDocuments = async (id) => {
     setIsLoading(true);
     const token = localStorage.getItem('authToken');
@@ -83,51 +85,30 @@ const DocumentVerificationPanel = () => {
       [docId]: status,
     }));
   };
-// ✅ Smart path resolver for nested "routes/uploads" folders
-const handleDocumentSelect = (doc) => {
-  setCurrentDocId(doc._id);
-  setCurrentDocName(doc.name);
 
-  let path = '';
+  // ✅ Clean + safe preview URL builder
+  const handleDocumentSelect = (doc) => {
+    setCurrentDocId(doc._id);
+    setCurrentDocName(doc.name);
 
-  if (doc.filePath) {
-    let cleanPath = doc.filePath
-      .replace(/^\.?\/?/, '')              
-      .replace(/^backend\//, '')          
-      .replace(/^routes\//, '')            
-      .replace(/^uploads\//, '')           
-      .replace(/^\/+/, '');              
-    const parts = cleanPath.split('/');
-    const fileName = parts.pop();        
-    const folderId = parts.pop();        
-
-    // ✅ Build URL that exactly matches your real structure
-    if (folderId && folderId.length > 10) {
-      // file exists in "backend/routes/uploads/<folderId>/<fileName>"
-      path = `http://localhost:8080/backend/routes/uploads/${folderId}/${fileName}`;
-    } else {
-      // fallback for direct uploads
-      path = `http://localhost:8080/backend/uploads/${fileName}`;
+    let path = '';
+    if (doc.filePath) {
+      if (doc.filePath.startsWith('http')) {
+        path = doc.filePath;
+      } else {
+        // prepend backend base URL safely
+        path = `${API_BASE}${doc.filePath}`;
+      }
     }
-  } 
-  else if (doc.filename) {
-    path = `http://localhost:8080/backend/uploads/${doc.filename}`;
-  } 
-  else if (doc.file) {
-    path = `http://localhost:8080/backend/uploads/${doc.file}`;
-  } 
-  else {
-    path = '';
-  }
 
-  setCurrentDocUrl(path);
-  setRemark(doc.remarks || '');
+    setCurrentDocUrl(path);
+    setRemark(doc.remarks || '');
 
-  const currentStatus = verificationStatus[doc._id] || doc.status;
-  setVerificationStatus(prev => ({ ...prev, [doc._id]: currentStatus }));
+    const currentStatus = verificationStatus[doc._id] || doc.status;
+    setVerificationStatus(prev => ({ ...prev, [doc._id]: currentStatus }));
 
-  console.log("✅ Clean preview URL:", path);
-};
+    console.log("✅ Clean preview URL:", path);
+  };
 
   const handleFinalSubmit = async () => {
     const docToUpdate = documents.find(d => d._id === currentDocId);
@@ -196,6 +177,17 @@ const handleDocumentSelect = (doc) => {
                       >
                         <AttachFileIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
                         <ListItemText primary={doc.name} secondary={`Status: ${doc.status}`} />
+                        {doc.filePath && (
+                          <IconButton
+                            edge="end"
+                            href={`${API_BASE}${doc.filePath}`}
+                            target="_blank"
+                            download
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <DownloadIcon />
+                          </IconButton>
+                        )}
                       </ListItem>
                     ))}
                   </List>

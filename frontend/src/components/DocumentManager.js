@@ -5,7 +5,8 @@ import {
   List,
   CircularProgress,
   Button,
-  Chip
+  Chip,
+  Stack
 } from '@mui/material';
 import DocumentUploadItem from './DocumentUploadItem';
 import { useAuth } from '../context/AuthContext';
@@ -15,13 +16,12 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import OTPVerificationForm from './OTPVerificationForm';
 
-// ✅ Required documents (with a manual entry option)
 const requiredDocs = [
   { name: 'Aadhaar Card' },
   { name: 'PAN Card' },
   { name: 'Educational Certificates' },
   { name: 'ID Proof' },
-  { name: 'Other Document', isManual: true }, // Enables manual text input
+  { name: 'Other Document', isManual: true },
 ];
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
@@ -35,12 +35,11 @@ const DocumentManager = () => {
   const { user } = useAuth();
   const token = localStorage.getItem('authToken');
 
-  // ✅ When OTP is verified, unlock uploads
   const handleVerificationSuccess = () => {
     setIsUploadAuthorized(true);
   };
 
-  // ✅ Fetch uploaded documents from backend
+  // ✅ Fetch uploaded documents
   const fetchDocuments = useCallback(async () => {
     setIsLoading(true);
 
@@ -55,9 +54,17 @@ const DocumentManager = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setUserDocuments(response.data.documents || []);
+      const docs = (response.data.documents || []).map((d) => {
+        if (d.status === 'Approved' || d.status === 'Verified') d.status = 'Accepted';
+        else if (d.status === 'Pending') d.status = 'Pending Review';
+        else if (d.status === 'Rejected') d.status = 'Rejected';
+        else d.status = 'Not Uploaded';
+        return d;
+      });
+
+      setUserDocuments(docs);
     } catch (error) {
-      console.error('Failed to fetch documents:', error);
+      console.error('❌ Failed to fetch documents:', error);
       showNotification('Unable to load your documents. Please try again.', 'error');
     } finally {
       setIsLoading(false);
@@ -68,34 +75,40 @@ const DocumentManager = () => {
     if (user) fetchDocuments();
   }, [user, fetchDocuments]);
 
-  // ✅ Match required docs to uploaded ones
-  const documentsToDisplay = requiredDocs.map((reqDoc) => {
-    if (reqDoc.isManual) {
-      // Always keep one "Other Document" slot available
-      const manualDoc = userDocuments.find(
-        (u) => u.name?.toLowerCase().trim() === 'other document'
+  // ✅ Merge required and extra uploaded docs
+  const documentsToDisplay = [
+    ...requiredDocs.map((reqDoc) => {
+      const uploadedDoc = userDocuments.find(
+        (u) => u.name?.toLowerCase().trim() === reqDoc.name.toLowerCase().trim()
       );
-      return manualDoc || { ...reqDoc, status: 'Not Uploaded', filePath: null };
-    }
+      return uploadedDoc || { ...reqDoc, status: 'Not Uploaded', filePath: null };
+    }),
+    ...userDocuments.filter(
+      (doc) =>
+        !requiredDocs.some(
+          (reqDoc) => reqDoc.name.toLowerCase().trim() === doc.name?.toLowerCase().trim()
+        )
+    ),
+  ];
 
-    // Normal matching for standard documents
-    const uploadedDoc = userDocuments.find(
-      (u) => u.name?.toLowerCase().trim() === reqDoc.name.toLowerCase().trim()
-    );
-    return uploadedDoc || { ...reqDoc, status: 'Not Uploaded', filePath: null };
-  });
+  // ✅ Status color logic
+  const getStatusChipColor = (status) => {
+    switch (status) {
+      case 'Accepted':
+        return 'success';
+      case 'Rejected':
+        return 'error';
+      case 'Pending Review':
+        return 'warning';
+      default:
+        return 'default';
+    }
+  };
 
   return (
     <Box>
-      {/* --- HEADER --- */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 1,
-        }}
-      >
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Typography variant="body2" color="textSecondary">
           Upload required documents and track their verification status.
         </Typography>
@@ -109,7 +122,7 @@ const DocumentManager = () => {
         </Button>
       </Box>
 
-      {/* --- OTP VERIFICATION SECTION --- */}
+      {/* OTP Section */}
       {isUploadAuthorized ? (
         <Chip
           label="Uploads Authorized"
@@ -124,21 +137,59 @@ const DocumentManager = () => {
         />
       )}
 
-      {/* --- DOCUMENT LIST RENDER --- */}
+      {/* Document List */}
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
         </Box>
       ) : (
         <List>
-          {documentsToDisplay.map((doc) => (
-            <DocumentUploadItem
-              key={doc.name}
-              doc={doc}
-              onUploadSuccess={fetchDocuments}
-              isUploadAuthorized={isUploadAuthorized}
-            />
-          ))}
+          {documentsToDisplay.map((doc) => {
+            // ✅ Build proper file URL
+            let fileUrl = null;
+
+            if (doc.filePath) {
+              fileUrl = `${API_URL}${doc.filePath}`;
+            } else if (user?._id && doc._id && doc.mimetype) {
+              const ext =
+                doc.mimetype === 'application/pdf'
+                  ? '.pdf'
+                  : doc.mimetype === 'image/png'
+                  ? '.png'
+                  : '.jpg';
+              fileUrl = `${API_URL}/uploads/${user._id}/${doc._id}${ext}`;
+            }
+
+            return (
+              <Stack
+                key={doc._id || doc.name}
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{ mb: 1 }}
+              >
+                <Box sx={{ flex: 1 }}>
+                  <DocumentUploadItem
+                    doc={doc}
+                    onUploadSuccess={fetchDocuments}
+                    isUploadAuthorized={isUploadAuthorized}
+                  />
+                </Box>
+
+                {/* ✅ Only status chip now, removed duplicate download icon */}
+                <Chip
+                  label={doc.status}
+                  color={getStatusChipColor(doc.status)}
+                  size="small"
+                  sx={{
+                    minWidth: 110,
+                    fontWeight: 500,
+                    textTransform: 'capitalize',
+                  }}
+                />
+              </Stack>
+            );
+          })}
         </List>
       )}
     </Box>
