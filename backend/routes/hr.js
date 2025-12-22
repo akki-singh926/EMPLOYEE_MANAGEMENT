@@ -3,19 +3,17 @@ const router = express.Router();
 const { protect, authorizeRoles } = require('../middlewares/auth');
 const User = require('../models/User');
 const crypto = require('crypto');
-const sendEmail = require('../utils/email');
+const sendEmail = require('../utils/email'); // ✅ Uses your new Mailtrap logic
 const logAction = require('../utils/logAction');
 
-
-
+// ----------------------
 // GET all employees (FIXED TO INCLUDE DOCUMENTS)
 // ----------------------
 router.get('/employees', protect, authorizeRoles('hr', 'admin'), async (req, res) => {
     try {
-     
         const employees = await User.find({})
             .select('-password -otp -otpExpires') 
-            .lean(); // Use .lean() for faster query
+            .lean(); 
 
         // --- NEW: CALCULATE OVERALL STATUS ---
         const employeesWithStatus = employees.map(employee => {
@@ -38,13 +36,11 @@ router.get('/employees', protect, authorizeRoles('hr', 'admin'), async (req, res
             
             return {
                 ...employee,
-                // Attach the calculated status field
                 status: status, 
             };
         });
         // --- END CALCULATION ---
 
-        // Send the complete list with calculated status to the frontend
         res.json({ success: true, data: employeesWithStatus });
 
     } catch (err) {
@@ -63,6 +59,7 @@ router.get('/pending-updates', protect, authorizeRoles('hr','admin','superAdmin'
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 router.patch('/pending-updates/:userId', protect, authorizeRoles('hr','admin','superAdmin'), async (req, res) => {
   try {
     const { userId } = req.params;
@@ -108,7 +105,7 @@ router.patch('/pending-updates/:userId', protect, authorizeRoles('hr','admin','s
         details: { before, after, remarks }
       });
 
-      // ✅ SendGrid Email for Approval
+      // ✅ Email Notification for Approval
       await sendEmail({
         to: user.email,
         subject: "✅ Profile Update Approved",
@@ -147,7 +144,7 @@ router.patch('/pending-updates/:userId', protect, authorizeRoles('hr','admin','s
         details: { requested: user.pendingUpdates.data, remarks }
       });
 
-      // ❌ SendGrid Email for Rejection
+      // ❌ Email Notification for Rejection
       await sendEmail({
         to: user.email,
         subject: "❌ Profile Update Rejected",
@@ -171,9 +168,6 @@ router.patch('/pending-updates/:userId', protect, authorizeRoles('hr','admin','s
 });
 
 
-
-
-
 // ----------------------
 // SEND OTP to employee
 // ----------------------
@@ -193,7 +187,7 @@ router.post('/send-otp', protect, authorizeRoles('hr', 'admin'), async (req, res
     user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 mins
     await user.save();
 
-    // Send email via SendGrid
+    // Send email via Notification Service
     const subject = 'Your OTP for Employee Verification';
     const text = `Hello ${user.name || ''},\n\nYour OTP is: ${otp}. It expires in 10 minutes.`;
     const html = `<p>Hello ${user.name || ''},</p><p>Your OTP is: <b>${otp}</b></p><p>It expires in 10 minutes.</p>`;
@@ -286,21 +280,20 @@ router.patch('/documents/:employeeId/:docId', protect, authorizeRoles('hr', 'adm
     doc.status = status;
     doc.remarks = remarks || '';
     await user.save();
-    // after await user.save();
-await logAction({
-  req,
-  actor: req.user,
-  action: `DOCUMENT_${status.toUpperCase()}`, // e.g. DOCUMENT_APPROVED or DOCUMENT_REJECTED
-  targetType: 'Document',
-  targetId: doc._id,
-  details: {
-    employeeId: user.employeeId,
-    employeeEmail: user.email,
-    docName: doc.name,
-    remarks
-  }
-});
 
+    await logAction({
+      req,
+      actor: req.user,
+      action: `DOCUMENT_${status.toUpperCase()}`,
+      targetType: 'Document',
+      targetId: doc._id,
+      details: {
+        employeeId: user.employeeId,
+        employeeEmail: user.email,
+        docName: doc.name,
+        remarks
+      }
+    });
 
     res.json({ success: true, message: `Document ${status.toLowerCase()}`, document: doc });
   } catch (err) {
@@ -309,7 +302,6 @@ await logAction({
   }
 });
 
-module.exports = router;
 // ----------------------
 // UPDATE employee info
 // ----------------------
@@ -343,3 +335,5 @@ router.put('/employees/:id', protect, authorizeRoles('admin', 'superAdmin'), asy
     res.status(500).json({ message: 'Server error while updating employee' });
   }
 });
+
+module.exports = router;

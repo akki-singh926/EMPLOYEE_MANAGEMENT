@@ -25,7 +25,6 @@ const DocumentVerificationList = () => {
   const { showNotification } = useNotification();
   const navigate = useNavigate();
 
-  // ✅ Fetch all employees (backend gives document status)
   const fetchEmployees = useCallback(async () => {
     setIsLoading(true);
     const token = localStorage.getItem('authToken');
@@ -41,14 +40,13 @@ const DocumentVerificationList = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // ✅ Fix: backend sends { success: true, data: employeesWithStatus }
       const allEmployees = response.data.data || [];
 
-      // ✅ Normalize case sensitivity just in case
-      const filtered = allEmployees.filter(emp => {
-        const status = emp.status?.toLowerCase();
-        return status === 'pending' || status === 'rejected';
-      });
+      const filtered = allEmployees.filter(emp =>
+        emp.documents?.some(
+          doc => doc.status === 'Pending' || doc.status === 'Rejected'
+        )
+      );
 
       setEmployees(filtered);
     } catch (error) {
@@ -63,13 +61,14 @@ const DocumentVerificationList = () => {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  // ✅ Navigate to detail view (opens HR verify page)
   const handleViewDocuments = (employeeId) => {
-    if (!employeeId) return showNotification('Employee ID missing.', 'error');
+    if (!employeeId) {
+      showNotification('Employee ID missing.', 'error');
+      return;
+    }
     navigate(`/admin/verify/${employeeId}`);
   };
 
-  // ✅ Loading state
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -78,7 +77,6 @@ const DocumentVerificationList = () => {
     );
   }
 
-  // ✅ No pending/rejected employees
   if (employees.length === 0) {
     return (
       <Typography variant="body1" sx={{ p: 3, textAlign: 'center' }}>
@@ -87,50 +85,51 @@ const DocumentVerificationList = () => {
     );
   }
 
-  // ✅ Render employee list
   return (
     <Card sx={{ mt: 2, borderRadius: 2, boxShadow: 2 }}>
       <CardContent sx={{ p: 0 }}>
         <Typography variant="h6" sx={{ p: 2, fontWeight: 600 }}>
-          Employees with Pending/Rejected Documents
+          Employees with Pending / Rejected Documents
         </Typography>
 
         <List>
-          {employees.map((emp) => (
-            <ListItem
-              key={emp._id}
-              divider
-              secondaryAction={
-                <Button
-                  variant="outlined"
-                  startIcon={<VisibilityIcon />}
-                  onClick={() => handleViewDocuments(emp.employeeId)}
-                >
-                  View Docs
-                </Button>
-              }
-            >
-              <ListItemText
-                primary={`${emp.name || 'Unnamed Employee'} (${emp.employeeId})`}
-                secondary={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2">Status:</Typography>
-                    <Chip
-                      label={emp.status || 'Unknown'}
-                      color={
-                        emp.status === 'Approved'
-                          ? 'success'
-                          : emp.status === 'Rejected'
-                          ? 'error'
-                          : 'warning'
-                      }
-                      size="small"
-                    />
-                  </Box>
+          {employees.map(emp => {
+            const pendingCount = emp.documents.filter(
+              d => d.status === 'Pending' || d.status === 'Rejected'
+            ).length;
+
+            return (
+              <ListItem
+                key={emp._id}
+                divider
+                secondaryAction={
+                  <Button
+                    variant="outlined"
+                    startIcon={<VisibilityIcon />}
+                    onClick={() => handleViewDocuments(emp.employeeId)}
+                  >
+                    View Docs
+                  </Button>
                 }
-              />
-            </ListItem>
-          ))}
+              >
+                <ListItemText
+                  primary={`${emp.name || 'Unnamed Employee'} (${emp.employeeId})`}
+                  secondary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2">
+                        Docs needing review:
+                      </Typography>
+                      <Chip
+                        label={pendingCount}
+                        color="warning"
+                        size="small"
+                      />
+                    </Box>
+                  }
+                />
+              </ListItem>
+            );
+          })}
         </List>
       </CardContent>
     </Card>

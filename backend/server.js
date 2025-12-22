@@ -1,73 +1,73 @@
 require('dotenv').config();
 const connectDB = require('./config/db');
 connectDB(process.env.MONGO_URI);
+
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
-//const xss = require('xss-clean');
 const path = require('path');
 
-
+// Import Routes
 const authRoutes = require('./routes/auth');
+const employeeRoutes = require('./routes/employee');
+const hrRoutes = require('./routes/hr');
+const superAdminRoutes = require('./routes/superAdmin');
+const attendanceRoutes = require('./routes/attendance');
 
 const app = express();
 
-
-
-
-
-
-// middlewares
-//app.use(helmet());
+// ----------------------
+// MIDDLEWARES
+// ----------------------
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
-
-// In server.js
-
-// Helmet provides default security headers, but we need to relax the frame-ancestors setting
-app.use(helmet({
-    // CRITICAL FIX: Allow framing (iframe loading) from the front-end development port (3000)
+// Helmet Security Config (Allowed for iframe/localhost:3000)
+app.use(
+  helmet({
     contentSecurityPolicy: {
-        directives: {
-         
-            frameAncestors: ["'self'", 'http://localhost:3000'], // This line explicitly allows the front-end port
-           
-        }
+      directives: {
+        frameAncestors: ["'self'", 'http://localhost:3000'],
+      },
     },
-    // The X-Frame-Options header must also be removed or relaxed
-    xFrameOptions: false, // This is often the actual blocker; explicitly disable it for dev/iframe
-}));
+    xFrameOptions: false,
+  })
+);
 
-// routes
+// ----------------------
+// STATIC FILES (UPLOADS)
+// ----------------------
+const uploadsPath = path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadsPath));
+
+// ----------------------
+// ROUTES
+// ----------------------
 app.use('/api/auth', authRoutes);
-
-// static uploads (for dev only) - change for production (use encrypted storage/Cloud)
-app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || './uploads')));
-
-// global error fallback
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ message: 'Server error' });
-});
-const employeeRoutes = require('./routes/employee');
 app.use('/api/employee', employeeRoutes);
-const hrRoutes = require('./routes/hr');
 app.use('/api/hr', hrRoutes);
-
-//changed 
-app.use('/api/admin', hrRoutes);
-//superAdmin
-const superAdmin=require('./routes/superAdmin');
-app.use('/api/superAdmin',superAdmin);
-//Attendanace
-const attendanceRoutes = require('./routes/attendance');
+app.use('/api/admin', hrRoutes); // OK if intentional
+app.use('/api/superAdmin', superAdminRoutes);
 app.use('/api/attendance', attendanceRoutes);
 
+// ----------------------
+// GLOBAL ERROR HANDLER
+// ----------------------
+app.use((err, req, res, next) => {
+  console.error('❌ Server Error:', err);
+  res.status(500).json({ message: 'Server error', error: err.message });
+});
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Start Scheduler
 require('./utils/scheduler');
+
+// ----------------------
+// START SERVER (🔥 THIS WAS MISSING)
+// ----------------------
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});

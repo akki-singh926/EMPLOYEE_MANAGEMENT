@@ -1,3 +1,4 @@
+// routes/auth.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -5,8 +6,10 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
 const { signToken } = require('../utils/token');
-const sgMail = require('@sendgrid/mail');
 
+// ✅ CHANGE 1: Remove SendGrid and import your new email utility
+// const sgMail = require('@sendgrid/mail');  <-- DELETE THIS
+const sendEmail = require('../utils/email'); // <-- ADD THIS
 
 const router = express.Router();
 
@@ -85,9 +88,9 @@ router.post('/login', [
 /**
  * POST /api/auth/forgot-password
  * -> generate reset token and store hashed token and expiry on user
- * (You should email the token link to user in production)
  */
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// ✅ CHANGE 2: Remove the SendGrid API Key line
+// sgMail.setApiKey(process.env.SENDGRID_API_KEY); <-- DELETE THIS
 
 // ----------------------
 // FORGOT PASSWORD
@@ -112,18 +115,16 @@ router.post('/forgot-password', [
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
 
-    const msg = {
+    // ✅ CHANGE 3: Use sendEmail instead of sgMail
+    await sendEmail({
       to: user.email,
-      from: process.env.EMAIL_FROM,
       subject: 'Password Reset Request',
       html: `
         <p>You requested a password reset.</p>
         <p>Click <a href="${resetUrl}">here</a> to reset your password.</p>
         <p>This link will expire in 30 minutes.</p>
       `,
-    };
-
-    await sgMail.send(msg);
+    });
 
     res.json({ message: 'Reset email sent successfully' });
 

@@ -137,6 +137,8 @@ router.get('/verified-documents', protect, authorizeRoles('superAdmin'), async (
             employeeId: user.employeeId,
             name: doc.name,
             filename: doc.filename,
+              filePath: doc.filePath,   
+
             mimetype: doc.mimetype,
             size: doc.size,
             status: doc.status,

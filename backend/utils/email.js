@@ -1,23 +1,32 @@
-const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  secure: false, // ✅ MUST be false for Port 587
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
 
 const sendEmail = async ({ to, subject, text, html }) => {
   try {
-    const msg = {
+    const mailOptions = {
+      from: `"Pegorion Support" <${process.env.EMAIL_FROM}>`, 
       to,
-      from: process.env.EMAIL_FROM,
       subject,
       text,
       html
     };
-    await sgMail.send(msg);
-    console.log('Email sent to', to);
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email sent to Real Gmail! Message ID:', info.messageId);
   } catch (err) {
-    console.error('SendGrid Error:', err);
-    throw new Error('Email sending failed');
+    console.error('❌ Email Error:', err);
+    throw new Error('Email sending failed: ' + err.message);
   }
 };
 
-module.exports = sendEmail;   
+module.exports = sendEmail;

@@ -1,15 +1,16 @@
-// src/components/DocumentVerificationPanel.js
 import React, { useState, useEffect } from 'react';
 import { 
   Box, Typography, Button, Grid, Card, CardContent, CircularProgress,
   ListItem, ListItemText, Select, MenuItem, InputLabel, 
   FormControl, TextField, Divider, Container, List, useTheme, IconButton
 } from '@mui/material';
+
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';  
 import CancelIcon from '@mui/icons-material/Cancel';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import DownloadIcon from '@mui/icons-material/Download';
+
 import { useNotification } from '../context/NotificationContext';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
@@ -36,9 +37,9 @@ const DocumentVerificationPanel = () => {
     setIsLoading(true);
     const token = localStorage.getItem('authToken');
 
-    if (!id || !token) { 
+    if (!id || !token) {
       setIsLoading(false);
-      return; 
+      return;
     }
 
     try {
@@ -46,15 +47,14 @@ const DocumentVerificationPanel = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      console.log("Fetched docs for HR:", response.data.documents);
-
       const fetchedDocs = response.data.documents || [];
       setEmployee(response.data.user || { name: '', employeeId: id });
       setDocuments(fetchedDocs);
 
-      // ✅ Auto-select first document if exists
+      // ✅ FIX 1: Auto-select first document that HAS a file
       if (fetchedDocs.length > 0) {
-        handleDocumentSelect(fetchedDocs[0]);
+        const firstWithFile = fetchedDocs.find(d => d.filePath);
+        handleDocumentSelect(firstWithFile || fetchedDocs[0]);
       } else {
         setCurrentDocName('No Documents Uploaded');
       }
@@ -68,15 +68,19 @@ const DocumentVerificationPanel = () => {
   };
 
   useEffect(() => {
-    if (employeeId) fetchDocuments(employeeId); 
-  }, [employeeId]); 
+    if (employeeId) fetchDocuments(employeeId);
+  }, [employeeId]);
 
-  // ✅ Status icon
+  // ✅ Status icon (safe fallback)
   const getIcon = (status) => {
-    if (status === 'Approved') return <CheckCircleIcon color="success" />;
-    if (status === 'Pending') return <PendingIcon color="warning" />;
-    if (status === 'Rejected') return <CancelIcon color="error" />;
-    return <PendingIcon color="disabled" />;
+    switch (status) {
+      case 'Approved':
+        return <CheckCircleIcon color="success" />;
+      case 'Rejected':
+        return <CancelIcon color="error" />;
+      default:
+        return <PendingIcon color="warning" />;
+    }
   };
 
   const handleStatusChange = (docId, status) => {
@@ -93,12 +97,9 @@ const DocumentVerificationPanel = () => {
 
     let path = '';
     if (doc.filePath) {
-      if (doc.filePath.startsWith('http')) {
-        path = doc.filePath;
-      } else {
-        // prepend backend base URL safely
-        path = `${API_BASE}${doc.filePath}`;
-      }
+      path = doc.filePath.startsWith('http')
+        ? doc.filePath
+        : `${API_BASE}${doc.filePath}`;
     }
 
     setCurrentDocUrl(path);
@@ -106,36 +107,33 @@ const DocumentVerificationPanel = () => {
 
     const currentStatus = verificationStatus[doc._id] || doc.status;
     setVerificationStatus(prev => ({ ...prev, [doc._id]: currentStatus }));
-
-    console.log("✅ Clean preview URL:", path);
   };
 
   const handleFinalSubmit = async () => {
     const docToUpdate = documents.find(d => d._id === currentDocId);
-    if (!docToUpdate) return showNotification("Please select a valid uploaded document.", 'warning');
-    
+    if (!docToUpdate) {
+      showNotification('Please select a valid uploaded document.', 'warning');
+      return;
+    }
+
     const finalStatus = verificationStatus[currentDocId] || docToUpdate.status;
 
     try {
-      await axios.patch(`${DOCS_ROUTE}/${employeeId}/${docToUpdate._id}`,
+      await axios.patch(
+        `${DOCS_ROUTE}/${employeeId}/${docToUpdate._id}`,
         { status: finalStatus, remarks: remark },
         { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } }
       );
 
       showNotification(`✅ ${docToUpdate.name} marked as ${finalStatus}.`, 'success');
-      showNotification(
-        `Notification sent to ${employee?.name || employeeId}: '${docToUpdate.name}' ${finalStatus.toLowerCase()}.`,
-        'info'
-      );
-
       fetchDocuments(employeeId);
-      
+
     } catch (error) {
       console.error('Verification update failed:', error);
-      showNotification("Failed to save verification status.", 'error');
+      showNotification('Failed to save verification status.', 'error');
     }
   };
-  
+
   if (!employeeId || isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -149,41 +147,44 @@ const DocumentVerificationPanel = () => {
       <Typography variant="h4" gutterBottom>
         Document Verification: {employee?.name || employeeId}
       </Typography>
-      <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
-        Review and approve/reject documents for <strong>{employeeId}</strong>.
-      </Typography>
 
       <Grid container spacing={3}>
         {/* LEFT: Document List */}
         <Grid item xs={12} md={4}>
-          <Card sx={{ height: '100%' }}>
+          <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>Document List</Typography>
+              <Typography variant="h6">Document List</Typography>
+
               {documents.length === 0 ? (
-                <Typography color={theme.palette.error.main}>No documents uploaded.</Typography>
+                <Typography color={theme.palette.error.main}>
+                  No documents uploaded.
+                </Typography>
               ) : (
                 <>
                   <List dense>
-                    {documents.map((doc) => (
-                      <ListItem 
+                    {documents.map(doc => (
+                      <ListItem
                         key={doc._id}
-                        secondaryAction={getIcon(verificationStatus[doc._id] || doc.status)}
                         onClick={() => handleDocumentSelect(doc)}
-                        sx={{ 
-                          cursor: 'pointer', 
-                          backgroundColor: currentDocId === doc._id ? theme.palette.action.selected : 'transparent',
-                          borderRadius: 1
+                        secondaryAction={getIcon(verificationStatus[doc._id] || doc.status)}
+                        sx={{
+                          cursor: 'pointer',
+                          backgroundColor:
+                            currentDocId === doc._id
+                              ? theme.palette.action.selected
+                              : 'transparent'
                         }}
                       >
-                        <AttachFileIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
-                        <ListItemText primary={doc.name} secondary={`Status: ${doc.status}`} />
+                        <AttachFileIcon sx={{ mr: 1 }} />
+                        <ListItemText
+                          primary={doc.name}
+                          secondary={`Status: ${doc.status}`}
+                        />
                         {doc.filePath && (
                           <IconButton
-                            edge="end"
                             href={`${API_BASE}${doc.filePath}`}
                             target="_blank"
-                            download
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={e => e.stopPropagation()}
                           >
                             <DownloadIcon />
                           </IconButton>
@@ -194,25 +195,19 @@ const DocumentVerificationPanel = () => {
 
                   <Divider sx={{ my: 2 }} />
 
-                  <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                    Verification Action ({currentDocName})
-                  </Typography>
-
                   <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                     <InputLabel>Status</InputLabel>
                     <Select
-                      value={
-                        verificationStatus[currentDocId] ||
-                        documents.find(d => d._id === currentDocId)?.status ||
-                        'Pending'
+                      value={verificationStatus[currentDocId] || 'Pending'}
+                      label="Status"
+                      onChange={(e) =>
+                        handleStatusChange(currentDocId, e.target.value)
                       }
-                      label="Set Status"
-                      onChange={(e) => handleStatusChange(currentDocId, e.target.value)}
                       disabled={!currentDocId}
                     >
-                      <MenuItem value={'Pending'}>Pending</MenuItem>
-                      <MenuItem value={'Approved'}>Approve</MenuItem>
-                      <MenuItem value={'Rejected'}>Reject</MenuItem>
+                      <MenuItem value="Pending">Pending</MenuItem>
+                      <MenuItem value="Approved">Approve</MenuItem>
+                      <MenuItem value="Rejected">Reject</MenuItem>
                     </Select>
                   </FormControl>
 
@@ -221,21 +216,19 @@ const DocumentVerificationPanel = () => {
                     multiline
                     rows={3}
                     label="Admin Remarks"
-                    placeholder="Notes or reason for rejection"
                     value={remark}
                     onChange={(e) => setRemark(e.target.value)}
                     sx={{ mb: 2 }}
                     disabled={!currentDocId}
                   />
 
-                  <Button 
-                    fullWidth 
-                    variant="contained" 
-                    color="secondary" 
+                  <Button
+                    fullWidth
+                    variant="contained"
                     onClick={handleFinalSubmit}
                     disabled={!currentDocId}
                   >
-                    Save Verification & Notify
+                    Save Verification
                   </Button>
                 </>
               )}
@@ -243,32 +236,47 @@ const DocumentVerificationPanel = () => {
           </Card>
         </Grid>
 
-        {/* RIGHT: Document Preview */}
+        {/* RIGHT: Preview */}
         <Grid item xs={12} md={8}>
-          <Card sx={{ height: '100%' }}> 
+          <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>Preview: {currentDocName}</Typography>
+              <Typography variant="h6">
+                Preview: {currentDocName}
+              </Typography>
+
               {currentDocUrl ? (
-                <Box sx={{ height: 600, border: '1px solid #ccc', mt: 2 }}>
-                  <iframe 
-                    src={currentDocUrl} 
-                    title={currentDocName}
-                    style={{ width: '100%', height: '100%', border: 'none' }}
-                  />
+                <Box sx={{ height: 600, mt: 2 }}>
+                  {currentDocUrl.match(/\.(jpg|jpeg|png)$/i) ? (
+                    <img
+                      src={currentDocUrl}
+                      alt="Preview"
+                      style={{ maxWidth: '100%', maxHeight: '100%' }}
+                    />
+                  ) : (
+                    <iframe
+                      src={currentDocUrl}
+                      title="Document Preview"
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  )}
                 </Box>
               ) : (
                 <Box
                   sx={{
                     height: 600,
-                    border: '1px dashed #ccc',
-                    mt: 2,
                     display: 'flex',
+                    justifyContent: 'center',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    border: '1px dashed #ccc',
+                    mt: 2
                   }}
                 >
                   <Typography color="textSecondary">
-                    {currentDocId ? 'No file uploaded for this document yet.' : 'Select a document to preview.'}
+                    {!currentDocId
+                      ? 'Select a document to preview.'
+                      : documents.find(d => d._id === currentDocId)?.filePath
+                        ? 'File uploaded. Awaiting verification.'
+                        : 'No file uploaded for this document yet.'}
                   </Typography>
                 </Box>
               )}

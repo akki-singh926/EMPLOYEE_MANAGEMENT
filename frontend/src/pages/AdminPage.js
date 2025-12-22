@@ -30,7 +30,6 @@ import axios from 'axios';
 import { useNotification } from '../context/NotificationContext';
 import UserFormModal from '../components/UserFormModal';
 import { useAuth } from '../context/AuthContext';
-import AttendanceManager from '../components/AttendanceManager';
 
 // --- PEGORION BRANDING COLORS ---
 const PRIMARY_COLOR = '#5A45FF';
@@ -491,8 +490,6 @@ const AdminPage = () => {
         )}
         {/* ------------------------------------------- */}
 
-        {/* --- ADD ATTENDANCE MANAGER HERE --- */}
-        <AttendanceManager />
 
         {/* Search Bar & Actions */}
         <Paper 
