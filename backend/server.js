@@ -13,7 +13,6 @@ const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employee');
 const hrRoutes = require('./routes/hr');
 const superAdminRoutes = require('./routes/superAdmin');
-const attendanceRoutes = require('./routes/attendance');
 
 const app = express();
 
@@ -51,7 +50,6 @@ app.use('/api/employee', employeeRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/admin', hrRoutes); // OK if intentional
 app.use('/api/superAdmin', superAdminRoutes);
-app.use('/api/attendance', attendanceRoutes);
 
 // ----------------------
 // GLOBAL ERROR HANDLER
@@ -61,8 +59,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Server error', error: err.message });
 });
 
-// Start Scheduler
-require('./utils/scheduler');
 
 // ----------------------
 // START SERVER (🔥 THIS WAS MISSING)
